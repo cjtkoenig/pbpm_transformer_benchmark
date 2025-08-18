@@ -290,12 +290,10 @@ class NextActivityTask:
                    outputs_dir: Path) -> Dict[str, Any]:
         """
         Run next activity prediction with cross-validation.
-        
         Args:
             datasets: List of dataset names
             raw_directory: Path to raw data directory
             outputs_dir: Path to save outputs
-            
         Returns:
             Dictionary with CV results
         """
@@ -357,13 +355,11 @@ def run_next_activity_task(config: Dict[str, Any], datasets: List[str],
                           raw_directory: Path, outputs_dir: Path) -> Dict[str, Any]:
     """
     Convenience function to run the next activity prediction task.
-    
     Args:
         config: Configuration dictionary
         datasets: List of dataset names
         raw_directory: Path to raw data directory
         outputs_dir: Path to save outputs
-        
     Returns:
         Results dictionary
     """

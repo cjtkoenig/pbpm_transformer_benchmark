@@ -2,6 +2,7 @@ torch==2.8.0
 pytorch-lightning==2.5.3
 torchmetrics==1.8.1
 lightning-utilities==0.15.2
+tensorflow
 pandas==2.3.1
 numpy==2.3.2
 scikit-learn==1.7.1

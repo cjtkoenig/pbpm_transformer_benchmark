@@ -9,6 +9,7 @@ from src.utils.seeding import set_all_seeds
 from src.tasks.next_activity import run_next_activity_task
 
 
+
 @hydra.main(version_base=None, config_path="../configs", config_name="benchmark")
 def main(config: DictConfig):
     print("Configuration:\n", OmegaConf.to_yaml(config))
