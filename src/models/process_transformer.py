@@ -1,3 +1,9 @@
+""" 
+This file contains the ProcessTransformer model for the next activity, next time, and remaining time tasks.
+It is based on the implementation in the following repository with only minor modifications:
+https://github.com/Zaharah/processtransformer
+"""
+
 import tensorflow as tf
 from tensorflow.keras import layers
 
@@ -13,7 +19,7 @@ class TransformerBlock(layers.Layer):
         self.dropout_a = layers.Dropout(rate)
         self.dropout_b = layers.Dropout(rate)
 
-    def call(self, inputs, training):
+    def call(self, inputs, training=None):
         attn_output = self.att(inputs, inputs)
         attn_output = self.dropout_a(attn_output, training=training)
         out_a = self.layernorm_a(inputs + attn_output)
