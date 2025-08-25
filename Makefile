@@ -88,5 +88,33 @@ run_custom: dirs
 sysinfo:
 	uv run python -m src.utils.system_report
 
-clean_all: clean clean_outputs clean_logs
+# ===== Cleanup Commands =====
+
+# Clean Python cache files
+clean:
+	@echo "Cleaning Python cache files..."
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -name "*.pyc" -delete 2>/dev/null || true
+	find . -name "*.pyo" -delete 2>/dev/null || true
+	find . -name "*.pyd" -delete 2>/dev/null || true
+	find . -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+
+# Clean output files
+clean_outputs:
+	@echo "Cleaning output files..."
+	rm -rf outputs/* 2>/dev/null || true
+	rm -rf lightning_logs/* 2>/dev/null || true
+
+# Clean log files
+clean_logs:
+	@echo "Cleaning log files..."
+	rm -rf *.log 2>/dev/null || true
+	rm -rf logs/* 2>/dev/null || true
+
+# Clean processed data
+clean_processed:
+	@echo "Cleaning processed data..."
+	rm -rf data/processed/*.pkl 2>/dev/null || true
+
+clean_all: clean clean_outputs clean_logs clean_processed
 	@echo "Cleaned all generated files and caches"

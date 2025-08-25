@@ -10,6 +10,7 @@ from src.tasks.next_activity import NextActivityTask
 from src.tasks.suffix import SuffixTask
 from src.tasks.next_time import NextTimeTask
 from src.tasks.remaining_time import RemainingTimeTask
+from src.tasks.multi_task import MultiTaskTask
 from src.data.preprocessor import SimplePreprocessor
 
 
@@ -64,6 +65,14 @@ def main(config: DictConfig):
             outputs_dir=outputs_dir
         )
         print(f"\nRemaining Time Task completed. Results: {results}")
+    elif config.task == "multi_task":
+        task = MultiTaskTask(config_dict)
+        results = task.run(
+            datasets=config.data.datasets,
+            raw_directory=project_root / config.data.path_raw,
+            outputs_dir=outputs_dir
+        )
+        print(f"\nMulti-Task Task completed. Results: {results}")
     else:
         raise ValueError(f"Task '{config.task}' not implemented yet")
 

@@ -2,7 +2,7 @@
 # python -m src.cli task=next_activity model.hidden_size=512
 seed: 42
 
-task: next_activity            # next_activity | suffix | next_time | remaining_time
+task: next_activity            # next_activity | suffix | next_time | remaining_time | multi_task
 cv:
   n_folds: 5
   stratify: null

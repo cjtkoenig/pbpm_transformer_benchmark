@@ -51,6 +51,9 @@ uv run python -m src.cli task=next_time data.datasets="[Helpdesk]"
 
 # Run remaining time prediction
 uv run python -m src.cli task=remaining_time data.datasets="[Helpdesk]"
+
+# Run multi-task learning (all three tasks simultaneously)
+uv run python -m src.cli task=multi_task model.name=mtlformer_multi data.datasets="[Helpdesk]"
 ```
 
 ## Data Preprocessing
@@ -78,13 +81,35 @@ uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" force_pre
 uv run python -m src.cli preprocess_action=clear
 ```
 
+## Available Models
+
+The benchmark supports multiple transformer models:
+
+### Process Transformer
+- **Framework**: TensorFlow/Keras
+- **Description**: Standard transformer model for PBPM tasks
+- **Usage**: `model.name=process_transformer`
+
+### MTLFormer
+- **Framework**: TensorFlow/Keras  
+- **Description**: Multi-Task Learning Transformer for PBPM tasks (Single Task Models)
+- **Usage**: `model.name=mtlformer`
+- **Note**: Implements the same architecture as Process Transformer, taken from the original repository
+
+### MTLFormer Multi-Task
+- **Framework**: TensorFlow/Keras  
+- **Description**: True Multi-Task Learning Transformer with shared parameters across all tasks
+- **Usage**: `model.name=mtlformer_multi`
+- **Task**: `task=multi_task`
+- **Note**: Creates a single model with three outputs (next_activity, next_time, remaining_time) that shares parameters
+
 ## Configuration
 
 The benchmark is configured via `configs/benchmark.yaml`:
 
 ```yaml
 # Task selection
-task: next_activity  # next_activity | suffix | next_time | remaining_time
+task: next_activity  # next_activity | suffix | next_time | remaining_time | multi_task
 
 # Data configuration
 data:
@@ -97,7 +122,7 @@ data:
 
 # Model configuration
 model:
-  name: baseline_pytorch  # baseline_pytorch | enhanced_pytorch | baseline_tensorflow | enhanced_tensorflow
+  name: process_transformer  # process_transformer | mtlformer | mtlformer_multi
   hidden_size: 256
   num_layers: 4
   num_heads: 8

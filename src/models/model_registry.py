@@ -10,10 +10,16 @@ from .process_transformer import (
     get_next_time_model as tf_next_time,
     get_remaining_time_model as tf_remaining_time
 )
+from .mtlformer import (
+    get_next_activity_model as mtl_next_activity,
+    get_next_time_model as mtl_next_time,
+    get_remaining_time_model as mtl_remaining_time,
+    get_predict_model as mtl_predict_model
+)
 
 
 class ModelRegistry:
-    """This registry manages transformer models for PBPM benchmarking, supporting both TensorFlow and PyTorch."""     
+    """This registry manages transformer models for PBPM benchmarking, supporting both TensorFlow and PyTorch."""
     def __init__(self):
         self._models = {}
         self._model_factories = {}
@@ -28,6 +34,22 @@ class ModelRegistry:
             framework="tensorflow", 
             factory=self._create_process_transformer,
             description="Process Transformer for PBPM tasks (TensorFlow)"
+        )
+        
+        # MTLFormer Model (TensorFlow) - Single Task Models
+        self.register_model(
+            name="mtlformer",
+            framework="tensorflow", 
+            factory=self._create_mtlformer,
+            description="Multi-Task Learning Transformer for PBPM tasks (TensorFlow) - Single Task Models"
+        )
+        
+        # MTLFormer Multi-Task Model (TensorFlow) - True Multi-Task Learning
+        self.register_model(
+            name="mtlformer_multi",
+            framework="tensorflow", 
+            factory=self._create_mtlformer_multi,
+            description="True Multi-Task Learning Transformer with shared parameters (TensorFlow)"
         )
         
         # Placeholder for future models
@@ -121,6 +143,79 @@ class ModelRegistry:
             else:
                 raise e
     
+    def _create_mtlformer(self, task: str, **kwargs) -> keras.Model:
+        """Create MTLFormer model for PBPM tasks."""
+        max_case_length = kwargs.get("max_case_length", 50)
+        vocab_size = kwargs.get("vocab_size", 1000)
+        embed_dim = kwargs.get("embed_dim", 36)
+        num_heads = kwargs.get("num_heads", 4)
+        ff_dim = kwargs.get("ff_dim", 64)
+        
+        try:
+            if task == "next_activity":
+                return mtl_next_activity(
+                    max_case_length=max_case_length,
+                    vocab_size=vocab_size,
+                    output_dim=vocab_size,
+                    embed_dim=embed_dim,
+                    num_heads=num_heads,
+                    ff_dim=ff_dim
+                )
+            elif task == "next_time":
+                return mtl_next_time(
+                    max_case_length=max_case_length,
+                    vocab_size=vocab_size,
+                    output_dim=1,
+                    embed_dim=embed_dim,
+                    num_heads=num_heads,
+                    ff_dim=ff_dim
+                )
+            elif task == "remaining_time":
+                return mtl_remaining_time(
+                    max_case_length=max_case_length,
+                    vocab_size=vocab_size,
+                    output_dim=1,
+                    embed_dim=embed_dim,
+                    num_heads=num_heads,
+                    ff_dim=ff_dim
+                )
+            else:
+                raise NotImplementedError(f"Task '{task}' not implemented for MTLFormer")
+        except TypeError as e:
+            if "training" in str(e):
+                # This is expected - TensorFlow models need training context
+                print(f"Warning: TensorFlow model creation requires training context. Error: {e}")
+                return None
+            else:
+                raise e
+    
+    def _create_mtlformer_multi(self, task: str, **kwargs) -> keras.Model:
+        """Create true multi-task learning MTLFormer model."""
+        max_case_length = kwargs.get("max_case_length", 50)
+        vocab_size = kwargs.get("vocab_size", 1000)
+        embed_dim = kwargs.get("embed_dim", 36)
+        num_heads = kwargs.get("num_heads", 4)
+        ff_dim = kwargs.get("ff_dim", 64)
+        
+        try:
+            # The multi-task model handles all tasks simultaneously
+            # Task parameter is ignored for this model type
+            return mtl_predict_model(
+                max_case_length=max_case_length,
+                vocab_size=vocab_size,
+                output_dim=vocab_size,  # For next activity classification
+                embed_dim=embed_dim,
+                num_heads=num_heads,
+                ff_dim=ff_dim
+            )
+        except TypeError as e:
+            if "training" in str(e):
+                # This is expected - TensorFlow models need training context
+                print(f"Warning: TensorFlow model creation requires training context. Error: {e}")
+                return None
+            else:
+                raise e
+    
     # Additional transformer models will be added here as they are implemented
     # Example PyTorch model factory:
     # def _create_model_3(self, task: str, **kwargs) -> lightning.LightningModule:
@@ -151,3 +246,11 @@ def create_model(name: str, task: str, **kwargs) -> Union[lightning.LightningMod
 def list_available_models() -> Dict[str, Dict[str, Any]]:
     """List all available models in the registry."""
     return model_registry.get_available_models()
+
+# Additional transformer variants can be added here as needed
+# Example:
+# @register_custom_model("transformer_attention")
+# def create_transformer_attention_model(task: str, vocab_size: int, **kwargs) -> Any:
+#     """Transformer with enhanced attention mechanisms."""
+#     # Implementation would go here
+#     pass
