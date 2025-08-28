@@ -719,31 +719,23 @@ if __name__ == "__main__":
     example_results = {
         "Helpdesk": {
             "next_activity": {
-                "process_transformer": 0.85,
-                "mtlformer": 0.83,
-                "mtlformer_multi": 0.87
+                "process_transformer": 0.85
             },
             "next_time": {
-                "process_transformer": 2.1,
-                "mtlformer": 2.3,
-                "mtlformer_multi": 1.9
+                "process_transformer": 2.1
             }
         },
         "BPI_Challenge_2012": {
             "next_activity": {
-                "process_transformer": 0.78,
-                "mtlformer": 0.76,
-                "mtlformer_multi": 0.79
+                "process_transformer": 0.78
             },
             "next_time": {
-                "process_transformer": 3.2,
-                "mtlformer": 3.4,
-                "mtlformer_multi": 3.0
+                "process_transformer": 3.2
             }
         }
     }
     
-    model_names = ["process_transformer", "mtlformer", "mtlformer_multi"]
+    model_names = ["process_transformer"]
     dataset_names = ["Helpdesk", "BPI_Challenge_2012"]
     
     # Initialize analysis

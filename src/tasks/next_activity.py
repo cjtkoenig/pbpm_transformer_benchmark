@@ -9,9 +9,11 @@ import torch
 import pytorch_lightning as lightning
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 import pickle
+from sklearn import metrics
 
 from ..data.encoders import Vocabulary
 from ..data.preprocessor import SimplePreprocessor
+from ..data.loader import LogsDataLoader
 from ..metrics import accuracy_score, f1_score, classification_report_metrics
 from ..utils.logging import create_logger
 
@@ -29,12 +31,31 @@ class NextActivityTask:
         self.vocabulary = None
         self.model = None
         self.results = {}
+        self.logger = None  # Will be initialized in run method
         
     def prepare_data(self, dataset_name: str, raw_directory: Path, processed_directory: Path, force_reprocess: bool = False) -> Tuple[pd.DataFrame, pd.Series, Vocabulary]:
-        """Load and prepare data for next activity prediction with simple preprocessing."""
+        """Load and prepare data for next activity prediction using ProcessTransformer pipeline."""
+        # First ensure data is processed using ProcessTransformer format
         preprocessor = SimplePreprocessor(raw_directory, processed_directory, self.config)
-        prefixes_df, labels_series, vocabulary = preprocessor.preprocess_dataset(dataset_name, force_reprocess)
-        return prefixes_df, labels_series, vocabulary
+        if not preprocessor.is_processed(dataset_name) or force_reprocess:
+            preprocessor.preprocess_dataset(dataset_name, force_reprocess)
+        
+        # Now use the ProcessTransformer loader
+        data_loader = LogsDataLoader(dataset_name, str(processed_directory))
+        
+        # Load data for next activity task
+        train_df, test_df, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("next_activity")
+        
+        # Combine train and test for evaluation
+        combined_df = pd.concat([train_df, test_df], ignore_index=True)
+        
+        # Create vocabulary from the metadata
+        vocabulary = Vocabulary(list(x_word_dict.keys()))
+        
+        # Create labels series
+        labels_series = combined_df["next_act"]
+        
+        return combined_df, labels_series, vocabulary
     
     def build_vocabulary(self, all_activity_tokens: List[str]) -> Vocabulary:
         """Build vocabulary from all activity tokens across datasets."""
@@ -51,14 +72,16 @@ class NextActivityTask:
         # Create a new vocabulary with all unique tokens
         return Vocabulary(list(all_tokens))
     
-    def create_model(self, vocab_size: int):
+    def create_model(self, vocab_size: int, max_case_length: int = None):
         """Create the next activity prediction model using transformer models."""
         from ..models.model_registry import create_model
+        if max_case_length is None:
+            max_case_length = self.config["model"].get("max_case_length", 50)
         return create_model(
             name="process_transformer",
             task="next_activity",
             vocab_size=vocab_size,
-            max_case_length=self.config["model"].get("max_case_length", 50),
+            max_case_length=max_case_length,
             embed_dim=self.config["model"].get("embed_dim", 36),
             num_heads=self.config["model"].get("num_heads", 4),
             ff_dim=self.config["model"].get("ff_dim", 64)
@@ -98,25 +121,15 @@ class NextActivityTask:
             callbacks.append(early_stopping)
             
             return callbacks
-            
-        elif isinstance(model, lightning.LightningModule):
+        else:
             # PyTorch Lightning model
-            trainer_accelerator = self.config["train"]["accelerator"]
-            if trainer_accelerator == "auto":
-                trainer_accelerator = (
-                    "gpu" if torch.cuda.is_available() 
-                    else ("mps" if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() 
-                          else "cpu")
-                )
-            
-            # Set up callbacks
             callbacks = []
             
             # Model checkpointing
             if checkpoint_dir:
                 checkpoint_callback = ModelCheckpoint(
-                    dirpath=checkpoint_dir,
-                    filename='model-{epoch:02d}-{val_loss:.2f}',
+                    dirpath=str(checkpoint_dir),
+                    filename="model-{epoch:02d}-{val_loss:.2f}",
                     monitor='val_loss',
                     mode='min',
                     save_top_k=3,
@@ -133,244 +146,183 @@ class NextActivityTask:
             )
             callbacks.append(early_stopping)
             
-            return lightning.Trainer(
-                accelerator=trainer_accelerator,
-                devices=self.config["train"]["devices"],
+            # Create trainer
+            trainer = lightning.Trainer(
                 max_epochs=self.config["train"]["max_epochs"],
+                accelerator=self.config["train"]["accelerator"],
+                devices=self.config["train"]["devices"],
+                callbacks=callbacks,
                 enable_progress_bar=True,
-                log_every_n_steps=50,
-                callbacks=callbacks
+                log_every_n_steps=10
             )
-        else:
-            raise ValueError(f"Unsupported model type: {type(model)}")
+            
+            return trainer
     
     def evaluate_model(self, model, test_data) -> Dict[str, float]:
         """Evaluate the model and compute metrics."""
         if isinstance(model, keras.Model):
-            # TensorFlow model
-            predictions = model.predict(test_data[0], verbose=0)
-            predicted_classes = np.argmax(predictions, axis=-1)
-            true_classes = test_data[1]
-        elif isinstance(model, lightning.LightningModule):
-            # PyTorch Lightning model
-            model.eval()
-            all_predictions = []
-            all_targets = []
-            
-            with torch.no_grad():
-                for batch in test_data:
-                    input_sequences, target_indices = batch
-                    if next(model.parameters()).is_cuda:
-                        input_sequences = input_sequences.cuda()
-                        target_indices = target_indices.cuda()
-                    
-                    logits = model(input_sequences)
-                    predictions = torch.argmax(logits, dim=-1)
-                    
-                    all_predictions.extend(predictions.cpu().numpy())
-                    all_targets.extend(target_indices.cpu().numpy())
-            
-            predicted_classes = np.array(all_predictions)
-            true_classes = np.array(all_targets)
+            # TensorFlow model evaluation
+            y_pred = np.argmax(model.predict(test_data[0]), axis=1)
+            y_true = test_data[1]
         else:
-            raise ValueError(f"Unsupported model type: {type(model)}")
+            # PyTorch Lightning model evaluation
+            model.eval()
+            with torch.no_grad():
+                outputs = model(test_data[0])
+                if isinstance(outputs, tuple):
+                    y_pred = torch.argmax(outputs[0], dim=1).cpu().numpy()
+                else:
+                    y_pred = torch.argmax(outputs, dim=1).cpu().numpy()
+                y_true = test_data[1].cpu().numpy()
         
-        # Calculate metrics using our comprehensive metrics module
-        vocab_size = len(self.vocabulary.index_to_token)
-        acc = accuracy_score(true_classes, predicted_classes, num_classes=vocab_size, ignore_index=0)
-        f1 = f1_score(true_classes, predicted_classes, num_classes=vocab_size, ignore_index=0)
-        
-        # Generate classification report
-        # Use all vocabulary tokens as target names (excluding pad token)
-        target_names = [self.vocabulary.index_to_token[i] for i in range(len(self.vocabulary.index_to_token)) if i != 0]
-        
-        classification_rep = classification_report_metrics(
-            true_classes, predicted_classes, 
-            target_names=target_names
-        )
+        # Calculate metrics
+        accuracy = accuracy_score(y_true, y_pred)
+        f1 = f1_score(y_true, y_pred, average='weighted')
         
         return {
-            "accuracy": acc,
-            "f1_score": f1,
-            "classification_report": classification_rep
+            'accuracy': accuracy,
+            'f1_score': f1
         }
     
     def run(self, datasets: List[str], raw_directory: Path, outputs_dir: Path) -> Dict[str, Any]:
-        """
-        Run the complete next activity prediction task.
-        
-        Args:
-            datasets: List of dataset names to process
-            raw_directory: Path to raw data directory
-            outputs_dir: Path to save outputs
-            
-        Returns:
-            Dictionary containing results for all datasets
-        """
-        print(f"Running Next Activity Prediction Task for datasets: {datasets}")
-        
-        # Set up logging
-        logger = create_logger(self.config, outputs_dir)
-        
-        # Set up processed directory
+        """Run the next activity prediction task on multiple datasets."""
         processed_directory = Path(self.config["data"]["path_processed"])
-
+        processed_directory.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize logger
+        self.logger = create_logger(self.config, outputs_dir)
+        
         # Train and evaluate per dataset
         results = {}
         
         for dataset_name in datasets:
             print(f"\n=== Processing Dataset: {dataset_name} ===")
             
-            # Load processed data
-            prefixes_file = processed_directory / f"{dataset_name}.prefixes.pkl"
-            labels_file = processed_directory / f"{dataset_name}.labels.pkl"
-            vocabulary_file = processed_directory / f"{dataset_name}.vocabulary.pkl"
-            
-            if not all([prefixes_file.exists(), labels_file.exists(), vocabulary_file.exists()]):
-                print(f"Processed data not found for {dataset_name}, skipping...")
+            try:
+                # Load and prepare data using ProcessTransformer format
+                data_loader = LogsDataLoader(dataset_name, str(processed_directory))
+                
+                # Check if data is processed
+                if not data_loader.is_processed():
+                    print(f"Data not processed for {dataset_name}, preprocessing...")
+                    preprocessor = SimplePreprocessor(raw_directory, processed_directory, self.config)
+                    preprocessor.preprocess_dataset(dataset_name, force_reprocess=False)
+                
+                # Load data for next activity task
+                train_df, test_df, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("next_activity")
+                
+                print(f"Vocabulary size: {vocab_size}")
+                print(f"Total classes: {total_classes}")
+                print(f"Max case length: {max_case_length}")
+                print(f"Train samples: {len(train_df)}")
+                print(f"Test samples: {len(test_df)}")
+                
+                # Prepare training data
+                train_token_x, train_token_y = data_loader.prepare_data_next_activity(
+                    train_df, x_word_dict, y_word_dict, max_case_length
+                )
+                
+                # Create and train model
+                model = self.create_model(vocab_size, max_case_length=max_case_length)
+                
+                if isinstance(model, keras.Model):
+                    # TensorFlow model training
+                    print("Training TensorFlow model...")
+                    
+                    # Create callbacks
+                    callbacks = self.create_trainer(model)
+                    
+                    # Train the model
+                    history = model.fit(
+                        train_token_x, train_token_y,
+                        epochs=self.config["train"]["max_epochs"],
+                        batch_size=self.config["train"]["batch_size"],
+                        validation_split=0.2,
+                        shuffle=True,
+                        verbose=2,
+                        callbacks=callbacks
+                    )
+                    
+                    # Evaluate over all prefixes (k) and save the results
+                    k, accuracies, fscores, precisions, recalls = [], [], [], [], []
+                    
+                    for i in range(max_case_length):
+                        test_data_subset = test_df[test_df["k"] == i]
+                        if len(test_data_subset) > 0:
+                            test_token_x, test_token_y = data_loader.prepare_data_next_activity(
+                                test_data_subset, x_word_dict, y_word_dict, max_case_length
+                            )
+                            y_pred = np.argmax(model.predict(test_token_x), axis=1)
+                            accuracy = metrics.accuracy_score(test_token_y, y_pred)
+                            precision, recall, fscore, _ = metrics.precision_recall_fscore_support(
+                                test_token_y, y_pred, average="weighted"
+                            )
+                            k.append(i)
+                            accuracies.append(accuracy)
+                            fscores.append(fscore)
+                            precisions.append(precision)
+                            recalls.append(recall)
+                    
+                    # Add average metrics
+                    k.append(max_case_length)
+                    accuracies.append(np.mean(accuracies))
+                    fscores.append(np.mean(fscores))
+                    precisions.append(np.mean(precisions))
+                    recalls.append(np.mean(recalls))
+                    
+                    print(f'Average accuracy across all prefixes: {np.mean(accuracies):.4f}')
+                    print(f'Average f-score across all prefixes: {np.mean(fscores):.4f}')
+                    print(f'Average precision across all prefixes: {np.mean(precisions):.4f}')
+                    print(f'Average recall across all prefixes: {np.mean(recalls):.4f}')
+                    
+                    # Save results
+                    results_df = pd.DataFrame({
+                        "k": k, "accuracy": accuracies, "fscore": fscores,
+                        "precision": precisions, "recall": recalls
+                    })
+                    
+                    result_path = outputs_dir / f"{dataset_name}_next_activity_results.csv"
+                    results_df.to_csv(result_path, index=False)
+                    
+                    results[dataset_name] = {
+                        'avg_accuracy': np.mean(accuracies),
+                        'avg_fscore': np.mean(fscores),
+                        'avg_precision': np.mean(precisions),
+                        'avg_recall': np.mean(recalls),
+                        'prefix_results': results_df.to_dict('records')
+                    }
+                    
+                else:
+                    # PyTorch Lightning model training
+                    print("Training PyTorch Lightning model...")
+                    trainer = self.create_trainer(model)
+                    
+                    # Create data module for training
+                    from ..training.datamodule import NextActivityDataModule
+                    datamodule = NextActivityDataModule(
+                        train_df=train_df,
+                        test_df=test_df,
+                        x_word_dict=x_word_dict,
+                        y_word_dict=y_word_dict,
+                        max_case_length=max_case_length,
+                        batch_size=self.config["train"]["batch_size"]
+                    )
+                    
+                    # Train the model
+                    trainer.fit(model, datamodule)
+                    
+                    # Evaluate
+                    test_results = trainer.test(model, datamodule)
+                    
+                    results[dataset_name] = {
+                        'test_accuracy': test_results[0]['test_accuracy'],
+                        'test_loss': test_results[0]['test_loss']
+                    }
+                
+            except Exception as e:
+                print(f"Error processing {dataset_name}: {e}")
+                if self.logger:
+                    print(f"Error processing {dataset_name}: {e}")  # Use print instead of logger.error
                 continue
-            
-            # Load data
-            with open(prefixes_file, 'rb') as f:
-                prefixes_data = pickle.load(f)
-            with open(labels_file, 'rb') as f:
-                labels_data = pickle.load(f)
-            with open(vocabulary_file, 'rb') as f:
-                vocabulary = pickle.load(f)
-            
-            self.vocabulary = vocabulary
-            print(f"Vocabulary size: {len(self.vocabulary.index_to_token)}")
-            
-            # Check data types and convert if needed
-            print(f"Prefixes data type: {type(prefixes_data)}")
-            print(f"Labels data type: {type(labels_data)}")
-            
-            # Convert pandas DataFrames/Series to numpy arrays
-            if isinstance(prefixes_data, pd.DataFrame):
-                print("Converting DataFrame to numpy array...")
-                X = prefixes_data.values
-            else:
-                X = np.array(prefixes_data)
-            
-            if isinstance(labels_data, pd.Series):
-                print("Converting Series to numpy array...")
-                y = labels_data.values
-            else:
-                y = np.array(labels_data)
-            
-            # The processed data seems to be in raw format. Let's create a simple test dataset
-            print("Creating simple test dataset for transformer...")
-            
-            # Create a simple test dataset with proper integer encoding
-            vocab_size = len(self.vocabulary.index_to_token)
-            max_length = self.config["model"].get("max_case_length", 50)
-            
-            # Create synthetic data for testing
-            num_samples = 1000
-            X = np.random.randint(0, vocab_size, size=(num_samples, max_length), dtype=np.int32)
-            y = np.random.randint(0, vocab_size, size=num_samples, dtype=np.int32)
-            
-            print(f"Created synthetic dataset: {X.shape}, {y.shape}")
-            
-            # Split data
-            split_index = int(0.8 * len(X))
-            X_train, X_val = X[:split_index], X[split_index:]
-            y_train, y_val = y[:split_index], y[split_index:]
-            
-            print(f"Training samples: {len(X_train)}, Validation samples: {len(X_val)}")
-            
-            # Create model
-            model = self.create_model(len(self.vocabulary.index_to_token))
-            
-            # Create trainer with checkpointing
-            checkpoint_dir = outputs_dir / "checkpoints" / dataset_name
-            checkpoint_dir.mkdir(parents=True, exist_ok=True)
-            trainer_setup = self.create_trainer(model, checkpoint_dir=checkpoint_dir)
-            
-            # Train model based on framework
-            if isinstance(model, keras.Model):
-                # TensorFlow training
-                history = model.fit(
-                    X_train, y_train,
-                    validation_data=(X_val, y_val),
-                    epochs=self.config["train"]["max_epochs"],
-                    batch_size=self.config["train"]["batch_size"],
-                    callbacks=trainer_setup,
-                    verbose=1
-                )
-                training_history = {
-                    "loss": [float(x) for x in history.history['loss']],
-                    "accuracy": [float(x) for x in history.history['accuracy']],
-                    "val_loss": [float(x) for x in history.history['val_loss']],
-                    "val_accuracy": [float(x) for x in history.history['val_accuracy']]
-                }
-                test_data = (X_val, y_val)
-            elif isinstance(model, lightning.LightningModule):
-                # PyTorch Lightning training
-                # Create data loaders
-                from ..training.datamodule import ClassificationPrefixDataModule
-                train_df = pd.DataFrame(X_train)
-                val_df = pd.DataFrame(X_val)
-                train_labels = pd.Series(y_train)
-                val_labels = pd.Series(y_val)
-                
-                data_module = ClassificationPrefixDataModule(
-                    train_prefix_df=train_df,
-                    train_labels=train_labels,
-                    val_prefix_df=val_df,
-                    val_labels=val_labels,
-                    vocabulary=self.vocabulary,
-                    batch_size=self.config["train"]["batch_size"]
-                )
-                
-                trainer_setup.fit(model, data_module)
-                training_history = {"framework": "pytorch_lightning"}
-                test_data = data_module.val_dataloader()
-            else:
-                raise ValueError(f"Unsupported model type: {type(model)}")
-            
-            # Evaluate model
-            evaluation_results = self.evaluate_model(model, test_data)
-            
-            # Store results
-            results[dataset_name] = {
-                "vocabulary_size": len(self.vocabulary.index_to_token),
-                "train_samples": len(X_train),
-                "val_samples": len(X_val),
-                "metrics": evaluation_results,
-                "training_history": training_history,
-                "framework": "tensorflow" if isinstance(model, keras.Model) else "pytorch"
-            }
-            
-            # Log results
-            logger.log_results(results[dataset_name], dataset_name)
-            
-            print(f"Dataset {dataset_name} - Accuracy: {evaluation_results['accuracy']:.4f}, "
-                  f"F1 Score: {evaluation_results['f1_score']:.4f}")
         
-        # Save results
-        results_file = outputs_dir / "next_activity_results.json"
-        with open(results_file, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        
-        logger.finish()
-        print(f"\nResults saved to: {results_file}")
         return results
-    
-    # Cross-validation methods removed - using simple train/validation split for now
-
-
-def run_next_activity_task(config: Dict[str, Any], datasets: List[str], 
-                          raw_directory: Path, outputs_dir: Path) -> Dict[str, Any]:
-    """
-    Convenience function to run the next activity prediction task.
-    Args:
-        config: Configuration dictionary
-        datasets: List of dataset names
-        raw_directory: Path to raw data directory
-        outputs_dir: Path to save outputs
-    Returns:
-        Results dictionary
-    """
-    task = NextActivityTask(config)
-    return task.run(datasets, raw_directory, outputs_dir)

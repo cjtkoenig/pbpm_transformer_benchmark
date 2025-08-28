@@ -49,14 +49,13 @@ Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vida
 
 ## Model Adapters
 
-Um unterschiedliche Modellarchitekturen in den Benchmark einzubinden, wird ein **einheitliches, kanonisches Datenformat** genutzt.  
+Um unterschiedliche Modellarchitekturen in den Benchmark einzubinden, wird ein **einheitliches, kanonisches Datenformat** basierend auf dem originalen ProcessTransformer genutzt.  
 Alle Datensätze werden **einmalig** vorverarbeitet (Präfix-Generierung, Kodierung, Normalisierung, Padding, Splits).  
 Diese Artefakte bestehen u. a. aus:
 
-- `X_{train,val,test}.npy` – Eingabesequenzen  
-- `y_{train,val,test}.npy` – Zielwerte (abhängig von der Benchmark-Aufgabe)  
-- `meta.json` – Metadaten (Vokabulare, `pad_id`, `eoc_id`, Normalisierungswerte, Feature-Liste, max. Präfixlänge)  
-- `splits.json` – fixe Case-IDs für Train/Val/Test  
+- `{task}_train.csv` / `{task}_test.csv` – Trainings- und Testdaten für jede Aufgabe  
+- `metadata.json` – Metadaten (Vokabulare, `x_word_dict`, `y_word_dict`, max. Präfixlänge)  
+- Einheitliche **Case-basierte Splits** (80/20 Train/Test)  
 
 ### Adapter-Konzept
 Da verschiedene Modelle Eingaben in unterschiedlicher Form erwarten, kommen **Adapter** zum Einsatz.  
@@ -85,6 +84,10 @@ Die Benchmark-Invarianten gelten für **alle Modelle**:
 - Dokumentierte **Hardware-/Software-Umgebung**  
 
 Adapter sind somit nur „Stecker“, die gewährleisten, dass jedes Modell exakt dieselben Daten konsumiert – lediglich in der Form, die es benötigt.
+
+### Implementierte Modelle
+- **ProcessTransformer** (TensorFlow) - Original-Implementation
+- **BERT Process** (PyTorch) - Platzhalter für zukünftige Modelle
 
 ### Validierung
 - Hashes der kanonischen Artefakte werden veröffentlicht.  
@@ -129,8 +132,7 @@ uv run python -m src.cli task=next_time data.datasets="[Helpdesk]"
 # Run remaining time prediction
 uv run python -m src.cli task=remaining_time data.datasets="[Helpdesk]"
 
-# Run multi-task learning (all three tasks simultaneously)
-uv run python -m src.cli task=multi_task model.name=mtlformer_multi data.datasets="[Helpdesk]"
+# Multi-task learning has been removed from this version
 ```
 
 ## Data Preprocessing
@@ -164,7 +166,7 @@ The benchmark is configured via `configs/benchmark.yaml`:
 
 ```yaml
 # Task selection
-task: next_activity  # next_activity | suffix | next_time | remaining_time | multi_task
+task: next_activity  # next_activity | suffix | next_time | remaining_time
 
 # Data configuration
 data:
@@ -177,7 +179,7 @@ data:
 
 # Model configuration
 model:
-  name: process_transformer  # process_transformer | mtlformer | mtlformer_multi
+  name: process_transformer  # process_transformer
   hidden_size: 256
   num_layers: 4
   num_heads: 8
@@ -274,23 +276,3 @@ Each task uses specific evaluation metrics:
 - **Next Activity**: Accuracy, F1-Score
 - **Suffix**: Normalized Damerau-Levenshtein Distance
 - **Time Predictions**: MAE, RMSE, R²
-
-## Licenses
-
-This project uses the following models and their respective licenses:
-
-- **ProcessTransformer**: Apache License 2.0
-  - Source: [ProcessTransformer Repository](https://github.com/processmining/process-transformer)
-  - Used for: Transformer-based process prediction models
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
