@@ -26,7 +26,7 @@ Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vida
   - **Erweitert**: zusätzliche Attribute (falls Modellarchitektur unterstützt)  
 
 ### Evaluation
-- **5-fold Cross-Validation**  
+- **5-fold Cross-Validation** mit Case-basierten Splits (verhindert Data Leakage)  
 - Innerhalb der Folds: 80/20-Split in Trainings- und Validierungsdaten  
 - Einheitliche Hardware: MacBook Pro (Apple M3 Pro, 36 GB RAM)  
 - Software: Python 3.13.5, PyTorch 2.8.0 (MPS)  
@@ -55,7 +55,7 @@ Diese Artefakte bestehen u. a. aus:
 
 - `{task}_train.csv` / `{task}_test.csv` – Trainings- und Testdaten für jede Aufgabe  
 - `metadata.json` – Metadaten (Vokabulare, `x_word_dict`, `y_word_dict`, max. Präfixlänge)  
-- Einheitliche **Case-basierte Splits** (80/20 Train/Test)  
+- Einheitliche **Case-basierte Splits** (5-fold Cross-Validation)  
 
 ### Adapter-Konzept
 Da verschiedene Modelle Eingaben in unterschiedlicher Form erwarten, kommen **Adapter** zum Einsatz.  
@@ -78,7 +78,7 @@ Adapter sind *leichte Umwandlungsschichten*, die nur die **Datenform** anpassen,
 ### Konformität mit dem Benchmark
 Die Benchmark-Invarianten gelten für **alle Modelle**:
 - Einheitliche **Tasks & Targets** (Next Activity, Next Time, Remaining Time, Suffix)  
-- Gleiche **Train/Val/Test-Splits** nach Case-ID  
+- Gleiche **5-fold Cross-Validation Splits** nach Case-ID  
 - Einheitliche **Preprocessing-Pipeline** (einmalig ausgeführt)  
 - Einheitliche **Metriken** pro Task  
 - Dokumentierte **Hardware-/Software-Umgebung**  
@@ -89,12 +89,22 @@ Adapter sind somit nur „Stecker“, die gewährleisten, dass jedes Modell exak
 - **ProcessTransformer** (TensorFlow) - Original-Implementation
 - **BERT Process** (PyTorch) - Platzhalter für zukünftige Modelle
 
+### Cross-Validation Implementation
+Die Implementierung folgt strikt der Rama-Maneiro et al. (2021) Methodik:
+
+- **Case-basierte Splits**: Alle Präfixe eines Cases werden entweder im Training oder Validation Set
+- **5 Folds**: Jeder Case erscheint in genau einem Validation-Fold
+- **Keine Data Leakage**: Präfixe desselben Cases können nicht zwischen Train/Val durchsickern
+- **Reproduzierbare Splits**: Feste Seeds für konsistente Ergebnisse
+- **Aggregierte Metriken**: Mean, Std, Min, Max über alle Folds
+
 ### Validierung
 - Hashes der kanonischen Artefakte werden veröffentlicht.  
 - Unit Tests prüfen u. a.:  
   - Round-Trip Konsistenz (`argmax(one_hot(y)) == y_index`)  
   - Masken entsprechen dem `pad_id`  
   - Sample-Anzahl pro Split ist identisch über alle Adapter  
+  - Case-basierte Splits ohne Überlappung
 
 Dieses Vorgehen stellt sicher, dass die Ergebnisse der Modelle **vergleichbar und reproduzierbar** bleiben.
 

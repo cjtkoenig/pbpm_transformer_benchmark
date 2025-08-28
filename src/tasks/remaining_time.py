@@ -16,6 +16,7 @@ from ..data.preprocessor import SimplePreprocessor
 from ..data.loader import LogsDataLoader
 from ..metrics import mean_absolute_error, mean_squared_error, r2_score
 from ..utils.logging import create_logger
+from ..utils.cross_validation import run_cross_validation
 
 
 class RemainingTimeTask:
@@ -32,6 +33,7 @@ class RemainingTimeTask:
         self.model = None
         self.results = {}
         self.logger = None  # Will be initialized in run method
+        self.current_dataset = None
         
     def prepare_data(self, dataset_name: str, raw_directory: Path, processed_directory: Path, force_reprocess: bool = False) -> Tuple[pd.DataFrame, pd.Series, Vocabulary]:
         """Load and prepare data for remaining time prediction using ProcessTransformer pipeline."""
@@ -46,7 +48,7 @@ class RemainingTimeTask:
         # Load data for remaining time task
         train_df, test_df, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("remaining_time")
         
-        # Combine train and test for evaluation
+        # Combine train and test for cross-validation
         combined_df = pd.concat([train_df, test_df], ignore_index=True)
         
         # Create vocabulary from the metadata
@@ -177,153 +179,164 @@ class RemainingTimeTask:
         
         # Calculate metrics
         mae = mean_absolute_error(y_true, y_pred)
-        mse = mean_squared_error(y_true, y_pred)
         rmse = mean_squared_error(y_true, y_pred, squared=False)
+        r2 = r2_score(y_true, y_pred)
         
         return {
             'mae': mae,
-            'mse': mse,
-            'rmse': rmse
+            'rmse': rmse,
+            'r2': r2
+        }
+    
+    def train_and_evaluate_fold(self, train_prefixes: pd.DataFrame, train_labels: pd.Series,
+                               val_prefixes: pd.DataFrame, val_labels: pd.Series, 
+                               fold_idx: int) -> Dict[str, Any]:
+        """
+        Train and evaluate a model on a single fold.
+        
+        Args:
+            train_prefixes: Training data prefixes
+            train_labels: Training labels
+            val_prefixes: Validation data prefixes
+            val_labels: Validation labels
+            fold_idx: Current fold index
+            
+        Returns:
+            Dictionary with fold results
+        """
+        print(f"Training fold {fold_idx + 1}...")
+        
+        # Prepare data using ProcessTransformer format
+        data_loader = LogsDataLoader(self.current_dataset, str(Path(self.config["data"]["path_processed"])))
+        
+        # Get vocabulary and model parameters
+        _, _, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("remaining_time")
+        
+        # Prepare training data
+        train_token_x, train_time_x, train_token_y, time_scaler, y_scaler = data_loader.prepare_data_remaining_time(
+            train_prefixes, x_word_dict, max_case_length
+        )
+        
+        # Prepare validation data using the same scalers
+        val_token_x, val_time_x, val_token_y, _, _ = data_loader.prepare_data_remaining_time(
+            val_prefixes, x_word_dict, max_case_length, time_scaler=time_scaler, y_scaler=y_scaler
+        )
+        
+        # Create model
+        model = self.create_model(vocab_size, max_case_length=max_case_length)
+        
+        # Create checkpoint directory for this fold
+        checkpoint_dir = Path(self.config.get("outputs_dir", "outputs")) / "checkpoints" / self.current_dataset / f"fold_{fold_idx}"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        
+        if isinstance(model, keras.Model):
+            # TensorFlow model training
+            callbacks = self.create_trainer(model, checkpoint_dir)
+            
+            # Train the model
+            history = model.fit(
+                [train_token_x, train_time_x], train_token_y,
+                epochs=self.config["train"]["max_epochs"],
+                batch_size=self.config["train"]["batch_size"],
+                validation_data=([val_token_x, val_time_x], val_token_y),
+                shuffle=True,
+                verbose=1,
+                callbacks=callbacks
+            )
+            
+            # Evaluate on validation set
+            val_metrics = self.evaluate_model(model, ([val_token_x, val_time_x], val_token_y))
+            
+        else:
+            # PyTorch Lightning model training
+            trainer = self.create_trainer(model, checkpoint_dir)
+            
+            # Create data module for this fold
+            from ..training.datamodule import RemainingTimeDataModule
+            datamodule = RemainingTimeDataModule(
+                train_df=train_prefixes,
+                test_df=val_prefixes,  # Use validation data as test for this fold
+                x_word_dict=x_word_dict,
+                y_word_dict=y_word_dict,
+                max_case_length=max_case_length,
+                batch_size=self.config["train"]["batch_size"]
+            )
+            
+            # Train the model
+            trainer.fit(model, datamodule)
+            
+            # Evaluate on validation set
+            test_results = trainer.test(model, datamodule)
+            val_metrics = {
+                'mae': test_results[0]['test_mae'],
+                'rmse': test_results[0].get('test_rmse', 0.0),
+                'r2': test_results[0].get('test_r2', 0.0)
+            }
+        
+        return {
+            'fold_idx': fold_idx,
+            'metrics': val_metrics,
+            'train_samples': len(train_prefixes),
+            'val_samples': len(val_prefixes)
         }
     
     def run(self, datasets: List[str], raw_directory: Path, outputs_dir: Path) -> Dict[str, Any]:
-        """Run the remaining time prediction task on multiple datasets."""
+        """Run the remaining time prediction task on multiple datasets using 5-fold cross-validation."""
         processed_directory = Path(self.config["data"]["path_processed"])
         processed_directory.mkdir(parents=True, exist_ok=True)
         
         # Initialize logger
         self.logger = create_logger(self.config, outputs_dir)
         
+        # Store outputs_dir in config for use in train_and_evaluate_fold
+        self.config["outputs_dir"] = str(outputs_dir)
+
         # Train and evaluate per dataset
         results = {}
         
         for dataset_name in datasets:
             print(f"\n=== Processing Dataset: {dataset_name} ===")
+            self.current_dataset = dataset_name
             
             try:
-                # Load and prepare data using ProcessTransformer format
-                data_loader = LogsDataLoader(dataset_name, str(processed_directory))
-                
-                # Check if data is processed
-                if not data_loader.is_processed():
-                    print(f"Data not processed for {dataset_name}, preprocessing...")
-                    preprocessor = SimplePreprocessor(raw_directory, processed_directory, self.config)
-                    preprocessor.preprocess_dataset(dataset_name, force_reprocess=False)
-                
-                # Load data for remaining time task
-                train_df, test_df, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("remaining_time")
-                
-                print(f"Vocabulary size: {vocab_size}")
-                print(f"Total classes: {total_classes}")
-                print(f"Max case length: {max_case_length}")
-                print(f"Train samples: {len(train_df)}")
-                print(f"Test samples: {len(test_df)}")
-                
-                # Prepare training data
-                train_token_x, train_time_x, train_token_y, time_scaler, y_scaler = data_loader.prepare_data_remaining_time(
-                    train_df, x_word_dict, max_case_length
+                # Load and prepare data
+                prefixes_df, labels_series, vocabulary = self.prepare_data(
+                    dataset_name, raw_directory, processed_directory, 
+                    force_reprocess=self.config.get("force_preprocess", False)
                 )
                 
-                # Create and train model
-                model = self.create_model(vocab_size, max_case_length=max_case_length)
+                print(f"Total samples: {len(prefixes_df)}")
+                print(f"Vocabulary size: {len(vocabulary.index_to_token)}")
                 
-                if isinstance(model, keras.Model):
-                    # TensorFlow model training
-                    print("Training TensorFlow model...")
-                    
-                    # Create callbacks
-                    callbacks = self.create_trainer(model)
-                    
-                    # Train the model with dual inputs
-                    history = model.fit(
-                        [train_token_x, train_time_x], train_token_y,
-                        epochs=self.config["train"]["max_epochs"],
-                        batch_size=self.config["train"]["batch_size"],
-                        validation_split=0.2,
-                        shuffle=True,
-                        verbose=2,
-                        callbacks=callbacks
-                    )
-                    
-                    # Evaluate over all prefixes (k) and save the results
-                    k, maes, mses, rmses = [], [], [], []
-                    
-                    for i in range(max_case_length):
-                        test_data_subset = test_df[test_df["k"] == i]
-                        if len(test_data_subset) > 0:
-                            test_token_x, test_time_x, test_y, _, _ = data_loader.prepare_data_remaining_time(
-                                test_data_subset, x_word_dict, max_case_length, time_scaler, y_scaler, False
-                            )
-                            
-                            y_pred = model.predict([test_token_x, test_time_x])
-                            
-                            # Inverse transform predictions and true values
-                            _test_y = y_scaler.inverse_transform(test_y)
-                            _y_pred = y_scaler.inverse_transform(y_pred)
-                            
-                            k.append(i)
-                            maes.append(metrics.mean_absolute_error(_test_y, _y_pred))
-                            mses.append(metrics.mean_squared_error(_test_y, _y_pred))
-                            rmses.append(np.sqrt(metrics.mean_squared_error(_test_y, _y_pred)))
-                    
-                    # Add average metrics
-                    k.append(max_case_length)
-                    maes.append(np.mean(maes))
-                    mses.append(np.mean(mses))
-                    rmses.append(np.mean(rmses))
-                    
-                    print(f'Average MAE across all prefixes: {np.mean(maes):.4f}')
-                    print(f'Average MSE across all prefixes: {np.mean(mses):.4f}')
-                    print(f'Average RMSE across all prefixes: {np.mean(rmses):.4f}')
-                    
-                    # Save results
-                    results_df = pd.DataFrame({
-                        "k": k, "mean_absolute_error": maes,
-                        "mean_squared_error": mses,
-                        "root_mean_squared_error": rmses
-                    })
-                    
-                    result_path = outputs_dir / f"{dataset_name}_remaining_time_results.csv"
-                    results_df.to_csv(result_path, index=False)
-                    
-                    results[dataset_name] = {
-                        'avg_mae': np.mean(maes),
-                        'avg_mse': np.mean(mses),
-                        'avg_rmse': np.mean(rmses),
-                        'prefix_results': results_df.to_dict('records')
-                    }
-                    
-                else:
-                    # PyTorch Lightning model training
-                    print("Training PyTorch Lightning model...")
-                    trainer = self.create_trainer(model)
-                    
-                    # Create data module for training
-                    from ..training.datamodule import RemainingTimeDataModule
-                    datamodule = RemainingTimeDataModule(
-                        train_df=train_df,
-                        test_df=test_df,
-                        x_word_dict=x_word_dict,
-                        y_word_dict=y_word_dict,
-                        max_case_length=max_case_length,
-                        batch_size=self.config["train"]["batch_size"]
-                    )
-                    
-                    # Train the model
-                    trainer.fit(model, datamodule)
-                    
-                    # Evaluate
-                    test_results = trainer.test(model, datamodule)
-                    
-                    results[dataset_name] = {
-                        'test_mae': test_results[0]['test_mae'],
-                        'test_loss': test_results[0]['test_loss']
-                    }
+                # Run 5-fold cross-validation
+                cv_results = run_cross_validation(
+                    task_class=self.__class__,
+                    config=self.config,
+                    prefixes_df=prefixes_df,
+                    labels_series=labels_series,
+                    vocabulary=vocabulary,
+                    cv_config=self.config["cv"],
+                    dataset_name=dataset_name
+                )
+                
+                # Store results
+                results[dataset_name] = cv_results
+                
+                # Print summary
+                print(f"\n=== Cross-Validation Results for {dataset_name} ===")
+                for metric, value in cv_results['cv_summary'].items():
+                    if metric.endswith('_mean'):
+                        print(f"{metric}: {value:.4f}")
+                
+                # Save detailed results
+                results_file = outputs_dir / f"{dataset_name}_remaining_time_cv_results.json"
+                with open(results_file, 'w') as f:
+                    json.dump(cv_results, f, indent=2, default=str)
                 
             except Exception as e:
                 print(f"Error processing {dataset_name}: {e}")
                 if self.logger:
-                    print(f"Error processing {dataset_name}: {e}")  # Use print instead of logger.error
+                    self.logger.error(f"Error processing {dataset_name}: {e}")
                 continue
         
         return results

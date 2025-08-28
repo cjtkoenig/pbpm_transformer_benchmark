@@ -55,7 +55,7 @@ class NextActivityDataset(Dataset):
         
         self.token_x = token_x
         self.token_y = token_y
-    
+
     def __len__(self):
         return len(self.df)
     
@@ -358,7 +358,7 @@ class RemainingTimeDataModule(lightning.LightningDataModule):
                 time_scaler=self.train_dataset.time_scaler,
                 y_scaler=self.train_dataset.y_scaler
             )
-    
+
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
@@ -366,7 +366,7 @@ class RemainingTimeDataModule(lightning.LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers
         )
-    
+
     def val_dataloader(self):
         return DataLoader(
             self.val_dataset,
@@ -374,7 +374,7 @@ class RemainingTimeDataModule(lightning.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers
         )
-    
+
     def test_dataloader(self):
         return DataLoader(
             self.test_dataset,
@@ -456,7 +456,7 @@ class RegressionPrefixDataModule(lightning.LightningDataModule):
                 torch.tensor(self.val_prefix_df.values, dtype=torch.long),
                 torch.tensor(self.val_labels.values, dtype=torch.float32)
             )
-    
+
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
@@ -464,7 +464,7 @@ class RegressionPrefixDataModule(lightning.LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers
         )
-    
+
     def val_dataloader(self):
         return DataLoader(
             self.val_dataset,
@@ -501,7 +501,7 @@ class SuffixPrefixDataModule(lightning.LightningDataModule):
                 torch.tensor(self.val_prefix_df.values, dtype=torch.long),
                 torch.tensor(self.val_labels.values, dtype=torch.long)
             )
-    
+
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
@@ -509,7 +509,7 @@ class SuffixPrefixDataModule(lightning.LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers
         )
-    
+
     def val_dataloader(self):
         return DataLoader(
             self.val_dataset,

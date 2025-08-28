@@ -42,8 +42,8 @@ class LogsDataLoader:
         token_x = tf.keras.preprocessing.sequence.pad_sequences(
             token_x, maxlen=max_case_length)
 
-        token_x = np.array(token_x, dtype=np.float32)
-        token_y = np.array(token_y, dtype=np.float32)
+        token_x = np.array(token_x, dtype=np.int32)
+        token_y = np.array(token_y, dtype=np.int32)
 
         return token_x, token_y
 
@@ -78,7 +78,7 @@ class LogsDataLoader:
         token_x = tf.keras.preprocessing.sequence.pad_sequences(
             token_x, maxlen=max_case_length)
         
-        token_x = np.array(token_x, dtype=np.float32)
+        token_x = np.array(token_x, dtype=np.int32)
         time_x = np.array(time_x, dtype=np.float32)
         y = np.array(y, dtype=np.float32)
 
@@ -114,11 +114,13 @@ class LogsDataLoader:
         token_x = tf.keras.preprocessing.sequence.pad_sequences(
             token_x, maxlen=max_case_length)
         
-        token_x = np.array(token_x, dtype=np.float32)
+        token_x = np.array(token_x, dtype=np.int32)
         time_x = np.array(time_x, dtype=np.float32)
         y = np.array(y, dtype=np.float32)
         
         return token_x, time_x, y, time_scaler, y_scaler
+
+
 
     def get_max_case_length(self, train_x: np.ndarray) -> int:
         """Get maximum case length from training data."""

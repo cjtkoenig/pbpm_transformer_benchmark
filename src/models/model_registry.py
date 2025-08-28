@@ -66,6 +66,7 @@ class ProcessTransformerAdapter(ModelAdapter):
         }
 
 
+# PLACEHOLDER FOR FUTURE MODELS
 class BERTAdapter(ModelAdapter):
     """Adapter for BERT-based process models (example for future models)."""
     
@@ -151,10 +152,13 @@ class ModelRegistry:
         
         try:
             if task == "next_activity":
+                # vocab_size includes special tokens like [PAD], [UNK], [EOC]
+                # but we only want to predict actual activities
+                output_dim = kwargs.get("output_dim", vocab_size)
                 return get_next_activity_model(
                     max_case_length=max_case_length,
                     vocab_size=vocab_size,
-                    output_dim=vocab_size,
+                    output_dim=output_dim,
                     embed_dim=embed_dim,
                     num_heads=num_heads,
                     ff_dim=ff_dim
