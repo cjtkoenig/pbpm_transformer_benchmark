@@ -13,10 +13,10 @@ from sklearn import metrics
 
 from ..data.encoders import Vocabulary
 from ..data.preprocessor import SimplePreprocessor
-from ..data.loader import LogsDataLoader
+from ..data.loader import CanonicalLogsDataLoader
 from ..metrics import mean_absolute_error, mean_squared_error, r2_score
 from ..utils.logging import create_logger
-from ..utils.cross_validation import run_cross_validation
+from ..utils.cross_validation import run_canonical_cross_validation
 
 
 class RemainingTimeTask:
@@ -35,29 +35,30 @@ class RemainingTimeTask:
         self.logger = None  # Will be initialized in run method
         self.current_dataset = None
         
-    def prepare_data(self, dataset_name: str, raw_directory: Path, processed_directory: Path, force_reprocess: bool = False) -> Tuple[pd.DataFrame, pd.Series, Vocabulary]:
-        """Load and prepare data for remaining time prediction using ProcessTransformer pipeline."""
-        # First ensure data is processed using ProcessTransformer format
+    def prepare_data(self, dataset_name: str, raw_directory: Path, processed_directory: Path, force_reprocess: bool = False) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        """Load and prepare data for remaining time prediction using canonical pipeline."""
+        # First ensure data is processed using canonical format
         preprocessor = SimplePreprocessor(raw_directory, processed_directory, self.config)
         if not preprocessor.is_processed(dataset_name) or force_reprocess:
-            preprocessor.preprocess_dataset(dataset_name, force_reprocess)
+            processing_info = preprocessor.preprocess_dataset(dataset_name, force_reprocess)
         
-        # Now use the ProcessTransformer loader
-        data_loader = LogsDataLoader(dataset_name, str(processed_directory))
+        # Now use the canonical loader
+        data_loader = CanonicalLogsDataLoader(dataset_name, str(processed_directory))
         
-        # Load data for remaining time task
-        train_df, test_df, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("remaining_time")
+        # Load all data for the task (we'll split by folds later)
+        # For now, we'll load fold 0 to get the structure
+        train_df, val_df = data_loader.load_fold_data("remaining_time", 0)
+        combined_df = pd.concat([train_df, val_df], ignore_index=True)
         
-        # Combine train and test for cross-validation
-        combined_df = pd.concat([train_df, test_df], ignore_index=True)
+        # Get metadata
+        metadata = {
+            "x_word_dict": data_loader.x_word_dict,
+            "y_word_dict": data_loader.y_word_dict,
+            "vocab_size": data_loader.vocab_size,
+            "num_activities": data_loader.num_activities
+        }
         
-        # Create vocabulary from the metadata
-        vocabulary = Vocabulary(list(x_word_dict.keys()))
-        
-        # Create labels series
-        labels_series = combined_df["remaining_time_days"]
-        
-        return combined_df, labels_series, vocabulary
+        return combined_df, metadata
     
     def build_vocabulary(self, all_activity_tokens: List[str]) -> Vocabulary:
         """Build vocabulary from all activity tokens across datasets."""
@@ -74,7 +75,7 @@ class RemainingTimeTask:
         # Create a new vocabulary with all unique tokens
         return Vocabulary(list(all_tokens))
     
-    def create_model(self, vocab_size: int, max_case_length: int = None):
+    def create_model(self, vocab_size: int, max_case_length: int = None, output_dim: int = 1):
         """Create the remaining time prediction model using transformer models."""
         from ..models.model_registry import create_model
         if max_case_length is None:
@@ -84,6 +85,7 @@ class RemainingTimeTask:
             task="remaining_time",
             vocab_size=vocab_size,
             max_case_length=max_case_length,
+            output_dim=output_dim,
             embed_dim=self.config["model"].get("embed_dim", 36),
             num_heads=self.config["model"].get("num_heads", 4),
             ff_dim=self.config["model"].get("ff_dim", 64)
@@ -95,43 +97,19 @@ class RemainingTimeTask:
             # TensorFlow model
             model.compile(
                 optimizer=keras.optimizers.Adam(learning_rate=self.config["train"]["learning_rate"]),
-                loss='log_cosh',  # Use LogCosh loss as in original ProcessTransformer
-                metrics=['mae']  # Use MAE as metric
+                loss='mse',
+                metrics=['mae']
             )
-            
-            # Set up callbacks
-            callbacks = []
-            
-            # Model checkpointing
-            if checkpoint_dir:
-                checkpoint_callback = keras.callbacks.ModelCheckpoint(
-                    filepath=str(checkpoint_dir / "model-{epoch:02d}-{val_loss:.2f}.h5"),
-                    monitor='val_loss',
-                    mode='min',
-                    save_best_only=True,
-                    save_weights_only=False
-                )
-                callbacks.append(checkpoint_callback)
-            
-            # Early stopping
-            early_stopping = keras.callbacks.EarlyStopping(
-                monitor='val_loss',
-                patience=5,
-                mode='min',
-                verbose=True
-            )
-            callbacks.append(early_stopping)
-            
-            return callbacks
+            return model
         else:
             # PyTorch Lightning model
             callbacks = []
             
-            # Model checkpointing
             if checkpoint_dir:
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
                 checkpoint_callback = ModelCheckpoint(
-                    dirpath=str(checkpoint_dir),
-                    filename="model-{epoch:02d}-{val_loss:.2f}",
+                    dirpath=checkpoint_dir,
+                    filename='model-{epoch:02d}-{val_loss:.2f}',
                     monitor='val_loss',
                     mode='min',
                     save_top_k=3,
@@ -139,16 +117,13 @@ class RemainingTimeTask:
                 )
                 callbacks.append(checkpoint_callback)
             
-            # Early stopping
             early_stopping = EarlyStopping(
                 monitor='val_loss',
-                patience=5,
-                mode='min',
-                verbose=True
+                patience=self.config["train"].get("patience", 5),
+                mode='min'
             )
             callbacks.append(early_stopping)
             
-            # Create trainer
             trainer = lightning.Trainer(
                 max_epochs=self.config["train"]["max_epochs"],
                 accelerator=self.config["train"]["accelerator"],
@@ -160,138 +135,140 @@ class RemainingTimeTask:
             
             return trainer
     
-    def evaluate_model(self, model, test_data) -> Dict[str, float]:
-        """Evaluate the model and compute metrics."""
-        if isinstance(model, keras.Model):
-            # TensorFlow model evaluation
-            y_pred = model.predict(test_data[0])
-            y_true = test_data[1]
-        else:
-            # PyTorch Lightning model evaluation
-            model.eval()
-            with torch.no_grad():
-                outputs = model(test_data[0])
-                if isinstance(outputs, tuple):
-                    y_pred = outputs[0].cpu().numpy()
-                else:
-                    y_pred = outputs.cpu().numpy()
-                y_true = test_data[1].cpu().numpy()
-        
-        # Calculate metrics
-        mae = mean_absolute_error(y_true, y_pred)
-        rmse = mean_squared_error(y_true, y_pred, squared=False)
-        r2 = r2_score(y_true, y_pred)
-        
-        return {
-            'mae': mae,
-            'rmse': rmse,
-            'r2': r2
-        }
-    
-    def train_and_evaluate_fold(self, train_prefixes: pd.DataFrame, train_labels: pd.Series,
-                               val_prefixes: pd.DataFrame, val_labels: pd.Series, 
-                               fold_idx: int) -> Dict[str, Any]:
+    def train_and_evaluate_fold(self, train_df: pd.DataFrame, val_df: pd.DataFrame, fold_idx: int) -> Dict[str, Any]:
         """
-        Train and evaluate a model on a single fold.
+        Train and evaluate model on a specific fold.
         
         Args:
-            train_prefixes: Training data prefixes
-            train_labels: Training labels
-            val_prefixes: Validation data prefixes
-            val_labels: Validation labels
-            fold_idx: Current fold index
+            train_df: Training data for this fold
+            val_df: Validation data for this fold
+            fold_idx: Fold index
             
         Returns:
-            Dictionary with fold results
+            Dictionary with training and evaluation results
         """
         print(f"Training fold {fold_idx + 1}...")
         
-        # Prepare data using ProcessTransformer format
-        data_loader = LogsDataLoader(self.current_dataset, str(Path(self.config["data"]["path_processed"])))
-        
-        # Get vocabulary and model parameters
-        _, _, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("remaining_time")
-        
-        # Prepare training data
-        train_token_x, train_time_x, train_token_y, time_scaler, y_scaler = data_loader.prepare_data_remaining_time(
-            train_prefixes, x_word_dict, max_case_length
-        )
-        
-        # Prepare validation data using the same scalers
-        val_token_x, val_time_x, val_token_y, _, _ = data_loader.prepare_data_remaining_time(
-            val_prefixes, x_word_dict, max_case_length, time_scaler=time_scaler, y_scaler=y_scaler
-        )
-        
-        # Create model
-        model = self.create_model(vocab_size, max_case_length=max_case_length)
-        
-        # Create checkpoint directory for this fold
-        checkpoint_dir = Path(self.config.get("outputs_dir", "outputs")) / "checkpoints" / self.current_dataset / f"fold_{fold_idx}"
+        # Create checkpoint directory
+        checkpoint_dir = Path("outputs/checkpoints") / self.current_dataset / f"fold_{fold_idx}"
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
-        if isinstance(model, keras.Model):
-            # TensorFlow model training
-            callbacks = self.create_trainer(model, checkpoint_dir)
+        # Create model
+        vocab_size = len(self.vocabulary.index_to_token)
+        max_case_length = max(len(prefix.split()) for prefix in train_df["prefix"])
+        
+        model = self.create_model(vocab_size, max_case_length, output_dim=1)
+        
+        # Create trainer
+        trainer = self.create_trainer(model, checkpoint_dir)
+        
+        # Train model
+        if isinstance(trainer, keras.Model):
+            # TensorFlow training
+            # Prepare data
+            x_train, time_x_train, y_train = self._prepare_tensorflow_data(train_df)
+            x_val, time_x_val, y_val = self._prepare_tensorflow_data(val_df)
             
-            # Train the model
-            history = model.fit(
-                [train_token_x, train_time_x], train_token_y,
+            # Train
+            history = trainer.fit(
+                [x_train, time_x_train], y_train,
+                validation_data=([x_val, time_x_val], y_val),
                 epochs=self.config["train"]["max_epochs"],
                 batch_size=self.config["train"]["batch_size"],
-                validation_data=([val_token_x, val_time_x], val_token_y),
-                shuffle=True,
-                verbose=1,
-                callbacks=callbacks
+                verbose=1
             )
             
-            # Evaluate on validation set
-            val_metrics = self.evaluate_model(model, ([val_token_x, val_time_x], val_token_y))
+            # Evaluate
+            val_loss, val_mae = trainer.evaluate([x_val, time_x_val], y_val, verbose=0)
+            y_pred = trainer.predict([x_val, time_x_val], verbose=0)
+            
+            # Calculate metrics
+            mae = mean_absolute_error(y_val, y_pred)
+            mse = mean_squared_error(y_val, y_pred)
+            r2 = r2_score(y_val, y_pred)
+            
+            metrics = {
+                'val_loss': val_loss,
+                'val_mae': val_mae,
+                'mae': mae,
+                'mse': mse,
+                'r2': r2
+            }
             
         else:
-            # PyTorch Lightning model training
-            trainer = self.create_trainer(model, checkpoint_dir)
+            # PyTorch Lightning training
+            from ..training.datamodule import CanonicalRemainingTimeDataModule
             
-            # Create data module for this fold
-            from ..training.datamodule import RemainingTimeDataModule
-            datamodule = RemainingTimeDataModule(
-                train_df=train_prefixes,
-                test_df=val_prefixes,  # Use validation data as test for this fold
-                x_word_dict=x_word_dict,
-                y_word_dict=y_word_dict,
-                max_case_length=max_case_length,
+            # Create data module
+            datamodule = CanonicalRemainingTimeDataModule(
+                dataset_name=self.current_dataset,
+                task="remaining_time",
+                fold_idx=fold_idx,
+                processed_dir=str(Path(self.config["data"]["path_processed"])),
                 batch_size=self.config["train"]["batch_size"]
             )
             
-            # Train the model
+            # Train
             trainer.fit(model, datamodule)
             
-            # Evaluate on validation set
-            test_results = trainer.test(model, datamodule)
-            val_metrics = {
-                'mae': test_results[0]['test_mae'],
-                'rmse': test_results[0].get('test_rmse', 0.0),
-                'r2': test_results[0].get('test_r2', 0.0)
+            # Evaluate
+            results = trainer.validate(model, datamodule)
+            
+            # Extract metrics
+            metrics = {
+                'val_loss': results[0]['val_loss'],
+                'val_mae': results[0].get('val_mae', 0.0),
+                'mae': results[0].get('val_mae', 0.0),  # For compatibility
+                'mse': results[0].get('val_mse', 0.0),
+                'r2': results[0].get('val_r2', 0.0)
             }
         
         return {
             'fold_idx': fold_idx,
-            'metrics': val_metrics,
-            'train_samples': len(train_prefixes),
-            'val_samples': len(val_prefixes)
+            'metrics': metrics,
+            'checkpoint_dir': str(checkpoint_dir)
         }
     
+    def _prepare_tensorflow_data(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Prepare data for TensorFlow training."""
+        # This is a simplified version - in practice, you'd use the canonical loader
+        x = df["prefix"].values
+        time_x = df[["recent_time", "latest_time", "time_passed"]].values.astype(np.float32)
+        y = df["remaining_time_days"].values.astype(np.float32)
+        
+        # Tokenize sequences
+        token_x = []
+        for _x in x:
+            token_x.append([self.vocabulary.token_to_index[s] for s in _x.split()])
+        
+        # Pad sequences
+        max_length = max(len(seq) for seq in token_x)
+        token_x = tf.keras.preprocessing.sequence.pad_sequences(
+            token_x, maxlen=max_length, padding='post', truncating='post')
+        
+        return token_x, time_x, y
+    
     def run(self, datasets: List[str], raw_directory: Path, outputs_dir: Path) -> Dict[str, Any]:
-        """Run the remaining time prediction task on multiple datasets using 5-fold cross-validation."""
-        processed_directory = Path(self.config["data"]["path_processed"])
-        processed_directory.mkdir(parents=True, exist_ok=True)
+        """
+        Run remaining time prediction task on multiple datasets.
         
+        Args:
+            datasets: List of dataset names to process
+            raw_directory: Directory containing raw data
+            outputs_dir: Directory to save outputs
+            
+        Returns:
+            Dictionary with results for all datasets
+        """
         # Initialize logger
-        self.logger = create_logger(self.config, outputs_dir)
+        self.logger = create_logger("remaining_time_task", outputs_dir)
         
-        # Store outputs_dir in config for use in train_and_evaluate_fold
-        self.config["outputs_dir"] = str(outputs_dir)
-
-        # Train and evaluate per dataset
+        # Set up processed directory
+        processed_directory = Path(self.config["data"]["path_processed"])
+        
+        # Check if force preprocessing is requested
+        force_reprocess = self.config.get("force_preprocess", False)
+        
         results = {}
         
         for dataset_name in datasets:
@@ -300,23 +277,25 @@ class RemainingTimeTask:
             
             try:
                 # Load and prepare data
-                prefixes_df, labels_series, vocabulary = self.prepare_data(
-                    dataset_name, raw_directory, processed_directory, 
-                    force_reprocess=self.config.get("force_preprocess", False)
+                combined_df, metadata = self.prepare_data(
+                    dataset_name, raw_directory, processed_directory, force_reprocess
                 )
                 
-                print(f"Total samples: {len(prefixes_df)}")
-                print(f"Vocabulary size: {len(vocabulary.index_to_token)}")
+                print(f"Total samples: {len(combined_df)}")
+                print(f"Vocabulary size: {metadata['vocab_size']}")
+                print(f"Number of activities: {metadata['num_activities']}")
                 
-                # Run 5-fold cross-validation
-                cv_results = run_cross_validation(
+                # Create vocabulary
+                self.vocabulary = Vocabulary(list(metadata["x_word_dict"].keys()))
+                
+                # Run canonical cross-validation
+                cv_results = run_canonical_cross_validation(
                     task_class=self.__class__,
                     config=self.config,
-                    prefixes_df=prefixes_df,
-                    labels_series=labels_series,
-                    vocabulary=vocabulary,
-                    cv_config=self.config["cv"],
-                    dataset_name=dataset_name
+                    df=combined_df,
+                    dataset_name=dataset_name,
+                    processed_dir=processed_directory,
+                    task_name="remaining_time"
                 )
                 
                 # Store results
@@ -336,7 +315,7 @@ class RemainingTimeTask:
             except Exception as e:
                 print(f"Error processing {dataset_name}: {e}")
                 if self.logger:
-                    self.logger.error(f"Error processing {dataset_name}: {e}")
+                    print(f"Error processing {dataset_name}: {e}")
                 continue
         
         return results

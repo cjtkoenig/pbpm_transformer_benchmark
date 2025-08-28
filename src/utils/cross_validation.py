@@ -1,148 +1,281 @@
 import numpy as np
 import pandas as pd
+import json
+import os
+from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
-from sklearn.model_selection import KFold, StratifiedKFold
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
+import hashlib
 
 
-class ProcessMiningCrossValidation:
-    """Cross-validation for process mining tasks with case-based splitting to avoid data leakage."""
+class CanonicalCrossValidation:
+    """
+    Canonical 5-fold case-based cross-validation following Rama-Maneiro et al. (2021) methodology.
     
-    def __init__(self, n_folds: int = 5, stratify: Optional[str] = None, 
-                 random_state: int = 42):
-        """Initialize cross-validation.
+    This implementation ensures:
+    - Case-based splits (all prefixes from same case in same fold)
+    - 5-fold CV with reproducible splits
+    - Persisted splits for consistent evaluation across models
+    - No data leakage between train/validation sets
+    """
+    
+    def __init__(self, n_folds: int = 5, random_state: int = 42):
+        """Initialize canonical cross-validation.
+        
         Args:
-            n_folds: Number of folds for cross-validation
-            stratify: Column name to stratify by (currently not used - kept for compatibility)
+            n_folds: Number of folds (default: 5)
             random_state: Random seed for reproducibility
         """
         self.n_folds = n_folds
-        self.stratify = stratify
         self.random_state = random_state
         
-    def split_by_cases(self, prefixes_df: pd.DataFrame, 
-                      labels_series: pd.Series) -> List[Tuple[np.ndarray, np.ndarray]]:
-        """Split data by case IDs to avoid data leakage.
-        
-        This ensures that all prefixes from the same case are either in train or validation,
-        preventing data leakage between related prefixes.
+    def create_case_based_splits(self, df: pd.DataFrame, dataset_name: str, 
+                                processed_dir: Path, task_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create and persist canonical 5-fold case-based splits.
         
         Args:
-            prefixes_df: DataFrame with prefix data (must contain 'case_id' column)
-            labels_series: Series with labels
+            df: DataFrame with processed data (must contain 'case_id' column)
+            dataset_name: Name of the dataset
+            processed_dir: Directory to save splits
+            
         Returns:
-            List of (train_indices, val_indices) tuples for each fold
+            Dictionary with split information and metadata
         """
-        if 'case_id' not in prefixes_df.columns:
+        if 'case_id' not in df.columns:
             raise ValueError("DataFrame must contain 'case_id' column for case-based splitting")
-
-        case_ids = prefixes_df['case_id'].unique()
-        print(f"Found {len(case_ids)} unique cases for cross-validation")
-
-        # Use simple k-fold split on cases (no stratification for now)
-        # This ensures each case appears in exactly one validation fold
+        
+        # Get unique cases
+        case_ids = df['case_id'].unique()
+        print(f"Creating canonical splits for {dataset_name}: {len(case_ids)} unique cases")
+        
+        # Create splits directory
+        base_splits_dir = processed_dir / dataset_name / "splits"
+        base_splits_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use task-specific subdirectory if task_name is provided
+        if task_name:
+            splits_dir = base_splits_dir / task_name
+        else:
+            splits_dir = base_splits_dir
+        splits_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Check if splits already exist and are valid
+        if self._splits_exist_and_valid(splits_dir, case_ids, task_name):
+            print(f"Using existing canonical splits for {dataset_name}")
+            return self._load_splits_metadata(splits_dir, task_name)
+        
+        # Create new splits
+        print(f"Creating new canonical splits for {dataset_name}")
+        
+        # Shuffle cases with fixed seed for reproducibility
+        np.random.seed(self.random_state)
+        shuffled_cases = np.random.permutation(case_ids)
+        
+        # Create 5-fold splits
         kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=self.random_state)
         
-        splits = []
-        for fold_idx, (train_case_idx, val_case_idx) in enumerate(kf.split(case_ids)):
-            train_cases = case_ids[train_case_idx]
-            val_cases = case_ids[val_case_idx]
-            
-            # Get indices for all prefixes belonging to these cases
-            train_indices = prefixes_df[prefixes_df['case_id'].isin(train_cases)].index.values
-            val_indices = prefixes_df[prefixes_df['case_id'].isin(val_cases)].index.values
-            
-            print(f"Fold {fold_idx + 1}: {len(train_cases)} train cases ({len(train_indices)} prefixes), "
-                  f"{len(val_cases)} val cases ({len(val_indices)} prefixes)")
-            
-            splits.append((train_indices, val_indices))
+        splits_info = {
+            'dataset_name': dataset_name,
+            'n_folds': self.n_folds,
+            'random_state': self.random_state,
+            'total_cases': len(case_ids),
+            'total_samples': len(df),
+            'case_ids_hash': self._hash_case_ids(case_ids),
+            'folds': {}
+        }
         
-        return splits
+        for fold_idx, (train_case_idx, val_case_idx) in enumerate(kf.split(shuffled_cases)):
+            train_cases = shuffled_cases[train_case_idx]
+            val_cases = shuffled_cases[val_case_idx]
+            
+            # Get data for this fold
+            train_mask = df['case_id'].isin(train_cases)
+            val_mask = df['case_id'].isin(val_cases)
+            
+            train_df = df[train_mask].copy()
+            val_df = df[val_mask].copy()
+            
+            # Save fold data
+            fold_dir = splits_dir / f"fold_{fold_idx}"
+            fold_dir.mkdir(exist_ok=True)
+            
+            train_df.to_csv(fold_dir / "train.csv", index=False)
+            val_df.to_csv(fold_dir / "val.csv", index=False)
+            
+            # Store fold information
+            splits_info['folds'][f'fold_{fold_idx}'] = {
+                'train_cases': len(train_cases),
+                'val_cases': len(val_cases),
+                'train_samples': len(train_df),
+                'val_samples': len(val_df),
+                'train_case_ids': train_cases.tolist(),
+                'val_case_ids': val_cases.tolist()
+            }
+            
+            print(f"Fold {fold_idx + 1}: {len(train_cases)} train cases ({len(train_df)} samples), "
+                  f"{len(val_cases)} val cases ({len(val_df)} samples)")
+        
+        # Save splits metadata (task-specific if task_name is provided)
+        if task_name:
+            metadata_file = splits_dir / f"splits_metadata_{task_name}.json"
+        else:
+            metadata_file = splits_dir / "splits_metadata.json"
+        
+        with open(metadata_file, 'w') as f:
+            json.dump(splits_info, f, indent=2)
+        
+        # Save case assignments for verification (global, task-independent)
+        case_assignments = {}
+        for fold_idx in range(self.n_folds):
+            fold_info = splits_info['folds'][f'fold_{fold_idx}']
+            for case_id in fold_info['train_case_ids']:
+                case_assignments[case_id] = {'fold': fold_idx, 'split': 'train'}
+            for case_id in fold_info['val_case_ids']:
+                case_assignments[case_id] = {'fold': fold_idx, 'split': 'val'}
+        
+        # Save global case assignments (task-independent)
+        with open(base_splits_dir / "case_assignments.json", 'w') as f:
+            json.dump(case_assignments, f, indent=2)
+        
+        return splits_info
     
-    def split_by_prefixes(self, prefixes_df: pd.DataFrame, 
-                         labels_series: pd.Series) -> List[Tuple[np.ndarray, np.ndarray]]:
-        """
-        Split data by individual prefixes (standard CV - NOT recommended for process mining).
+    def _splits_exist_and_valid(self, splits_dir: Path, case_ids: np.ndarray, task_name: Optional[str] = None) -> bool:
+        """Check if canonical splits exist and are valid."""
+        # Use task-specific metadata file if task_name is provided
+        if task_name:
+            metadata_file = splits_dir / f"splits_metadata_{task_name}.json"
+        else:
+            metadata_file = splits_dir / "splits_metadata.json"
+        if not metadata_file.exists():
+            return False
         
-        WARNING: This can cause data leakage as prefixes from the same case may appear
-        in both train and validation sets.
+        try:
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+            
+            # Check if case IDs hash matches
+            stored_hash = metadata.get('case_ids_hash')
+            current_hash = self._hash_case_ids(case_ids)
+            
+            if stored_hash != current_hash:
+                print(f"Case IDs hash mismatch - recreating splits")
+                return False
+            
+            # Check if all fold files exist
+            for fold_idx in range(self.n_folds):
+                fold_dir = splits_dir / f"fold_{fold_idx}"
+                if not (fold_dir / "train.csv").exists() or not (fold_dir / "val.csv").exists():
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error validating splits: {e}")
+            return False
+    
+    def _load_splits_metadata(self, splits_dir: Path, task_name: Optional[str] = None) -> Dict[str, Any]:
+        """Load splits metadata from disk."""
+        # Use task-specific metadata file if task_name is provided
+        if task_name:
+            metadata_file = splits_dir / f"splits_metadata_{task_name}.json"
+        else:
+            metadata_file = splits_dir / "splits_metadata.json"
+        
+        with open(metadata_file, 'r') as f:
+            return json.load(f)
+    
+    def _hash_case_ids(self, case_ids: np.ndarray) -> str:
+        """Create hash of case IDs for validation."""
+        sorted_ids = sorted(case_ids)
+        return hashlib.md5(str(sorted_ids).encode()).hexdigest()
+    
+    def load_fold_data(self, dataset_name: str, fold_idx: int, 
+                      processed_dir: Path, task_name: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Load train and validation data for a specific fold.
         
         Args:
-            prefixes_df: DataFrame with prefix data
-            labels_series: Series with labels
+            dataset_name: Name of the dataset
+            fold_idx: Fold index (0-4)
+            processed_dir: Directory containing processed data
+            
         Returns:
-            List of (train_indices, val_indices) tuples
+            Tuple of (train_df, val_df)
         """
-        n_samples = len(prefixes_df)
-        indices = np.arange(n_samples)
-        
-        if self.stratify:
-            # Stratified split based on labels
-            skf = StratifiedKFold(n_splits=self.n_folds, shuffle=True, 
-                                random_state=self.random_state)
-            return list(skf.split(indices, labels_series.values))
+        base_splits_dir = processed_dir / dataset_name / "splits"
+        if task_name:
+            splits_dir = base_splits_dir / task_name
         else:
-            # Simple k-fold split
-            kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=self.random_state)
-            return list(kf.split(indices))
+            splits_dir = base_splits_dir
+        fold_dir = splits_dir / f"fold_{fold_idx}"
+        
+        if not fold_dir.exists():
+            raise ValueError(f"Fold {fold_idx} not found for dataset {dataset_name}")
+        
+        train_df = pd.read_csv(fold_dir / "train.csv")
+        val_df = pd.read_csv(fold_dir / "val.csv")
+        
+        return train_df, val_df
+    
+    def get_splits_info(self, dataset_name: str, processed_dir: Path, task_name: Optional[str] = None) -> Dict[str, Any]:
+        """Get information about existing splits."""
+        base_splits_dir = processed_dir / dataset_name / "splits"
+        if task_name:
+            splits_dir = base_splits_dir / task_name
+            metadata_file = splits_dir / f"splits_metadata_{task_name}.json"
+        else:
+            splits_dir = base_splits_dir
+            metadata_file = splits_dir / "splits_metadata.json"
+        
+        if not metadata_file.exists():
+            return {}
+        
+        with open(metadata_file, 'r') as f:
+            return json.load(f)
 
 
-def run_cross_validation(task_class, config: Dict[str, Any], 
-                        prefixes_df: pd.DataFrame, labels_series: pd.Series,
-                        vocabulary, cv_config: Dict[str, Any], 
-                        dataset_name: str = None) -> Dict[str, Any]:
+def run_canonical_cross_validation(task_class, config: Dict[str, Any], 
+                                  df: pd.DataFrame, dataset_name: str,
+                                  processed_dir: Path, task_name: str) -> Dict[str, Any]:
     """
-    Run cross-validation for a given task.
+    Run canonical cross-validation for a given task.
     
     Args:
         task_class: Task class to instantiate
         config: Configuration dictionary
-        prefixes_df: DataFrame with prefix data
-        labels_series: Series with labels
-        vocabulary: Vocabulary object
-        cv_config: Cross-validation configuration
-        dataset_name: Name of the dataset being processed
+        df: DataFrame with all data
+        dataset_name: Name of the dataset
+        processed_dir: Directory containing processed data
+        
     Returns:
         Dictionary with CV results including fold results and aggregated metrics
     """
-    cv = ProcessMiningCrossValidation(
-        n_folds=cv_config.get('n_folds', 5),
-        stratify=cv_config.get('stratify'),
+    cv = CanonicalCrossValidation(
+        n_folds=config['cv'].get('n_folds', 5),
         random_state=config.get('seed', 42)
     )
     
-    # Choose split method based on task
-    if cv_config.get('split_by_cases', True):
-        print(f"Using case-based cross-validation for {dataset_name}")
-        splits = cv.split_by_cases(prefixes_df, labels_series)
-    else:
-        print(f"Using prefix-based cross-validation for {dataset_name}")
-        splits = cv.split_by_prefixes(prefixes_df, labels_series)
+    # Create or load canonical splits
+    splits_info = cv.create_case_based_splits(df, dataset_name, processed_dir, task_name)
     
     fold_results = []
     
-    for fold_idx, (train_indices, val_indices) in enumerate(splits):
-        print(f"\n=== Fold {fold_idx + 1}/{len(splits)} ===")
+    for fold_idx in range(splits_info['n_folds']):
+        print(f"\n=== Fold {fold_idx + 1}/{splits_info['n_folds']} ===")
         
-        # Split data
-        train_prefixes = prefixes_df.iloc[train_indices].reset_index(drop=True)
-        train_labels = labels_series.iloc[train_indices].reset_index(drop=True)
-        val_prefixes = prefixes_df.iloc[val_indices].reset_index(drop=True)
-        val_labels = labels_series.iloc[val_indices].reset_index(drop=True)
+        # Load fold data
+        train_df, val_df = cv.load_fold_data(dataset_name, fold_idx, processed_dir, task_name)
         
-        print(f"Train samples: {len(train_prefixes)}, Validation samples: {len(val_prefixes)}")
+        print(f"Train samples: {len(train_df)}, Validation samples: {len(val_df)}")
         
         # Create task instance
         task = task_class(config)
-        task.vocabulary = vocabulary
-        
-        # Set the dataset name
-        if dataset_name:
-            task.current_dataset = dataset_name
+        task.current_dataset = dataset_name
         
         # Train and evaluate
         fold_result = task.train_and_evaluate_fold(
-            train_prefixes, train_labels, val_prefixes, val_labels, fold_idx
+            train_df, val_df, fold_idx
         )
         
         fold_results.append(fold_result)
@@ -154,7 +287,7 @@ def run_cross_validation(task_class, config: Dict[str, Any],
     return {
         'fold_results': fold_results,
         'cv_summary': cv_results,
-        'cv_config': cv_config,
+        'splits_info': splits_info,
         'dataset_name': dataset_name
     }
 

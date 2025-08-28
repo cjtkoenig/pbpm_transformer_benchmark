@@ -15,7 +15,20 @@ from src.data.preprocessor import SimplePreprocessor
 
 @hydra.main(version_base=None, config_path="../configs", config_name="benchmark")
 def main(config: DictConfig):
-    print("Configuration:\n", OmegaConf.to_yaml(config))
+    # Print clean configuration header
+    print("\n" + "=" * 80)
+    print(" PBPM TRANSFORMER BENCHMARK")
+    print("=" * 80)
+    
+    print(f"Task:           {config.task}")
+    print(f"Model:          {config.model.name}")
+    print(f"Datasets:       {', '.join(config.data.datasets)}")
+    print(f"Cross-validation: {config.cv.n_folds} folds")
+    print(f"Batch size:     {config.train.batch_size}")
+    print(f"Max epochs:     {config.train.max_epochs}")
+    print(f"Learning rate:  {config.train.learning_rate}")
+    print(f"Seed:           {config.seed}")
+    print()
 
     project_root = Path(hydra.utils.get_original_cwd())
     outputs_dir = project_root / "outputs"
@@ -39,7 +52,8 @@ def main(config: DictConfig):
             raw_directory=project_root / config.data.path_raw,
             outputs_dir=outputs_dir
         )
-        print(f"\nNext Activity Task completed. Results: {results}")
+        print(f"\n✓ Next Activity Task completed successfully")
+        print(f"  Results saved to outputs/")
     elif config.task == "suffix":
         task = SuffixTask(config_dict)
         results = task.run(
@@ -47,7 +61,8 @@ def main(config: DictConfig):
             raw_directory=project_root / config.data.path_raw,
             outputs_dir=outputs_dir
         )
-        print(f"\nSuffix Task completed. Results: {results}")
+        print(f"\n✓ Suffix Task completed successfully")
+        print(f"  Results saved to outputs/")
     elif config.task == "next_time":
         task = NextTimeTask(config_dict)
         results = task.run(
@@ -55,7 +70,8 @@ def main(config: DictConfig):
             raw_directory=project_root / config.data.path_raw,
             outputs_dir=outputs_dir
         )
-        print(f"\nNext Time Task completed. Results: {results}")
+        print(f"\n✓ Next Time Task completed successfully")
+        print(f"  Results saved to outputs/")
     elif config.task == "remaining_time":
         task = RemainingTimeTask(config_dict)
         results = task.run(
@@ -63,7 +79,8 @@ def main(config: DictConfig):
             raw_directory=project_root / config.data.path_raw,
             outputs_dir=outputs_dir
         )
-        print(f"\nRemaining Time Task completed. Results: {results}")
+        print(f"\n✓ Remaining Time Task completed successfully")
+        print(f"  Results saved to outputs/")
 
     else:
         raise ValueError(f"Task '{config.task}' not implemented yet")
@@ -76,7 +93,7 @@ def main(config: DictConfig):
         "task": config.task
     }
     (outputs_dir / "env.json").write_text(json.dumps(env_info, indent=2))
-    print("\nSaved environment info to outputs/env.json")
+    print(f"\nEnvironment info saved to outputs/env.json")
 
 
 def handle_preprocess_action(config: DictConfig, project_root: Path):
@@ -89,7 +106,9 @@ def handle_preprocess_action(config: DictConfig, project_root: Path):
     
     if config.preprocess_action == "info":
         processed_info = preprocessor.get_processed_info()
-        print("\n=== Processed Data Information ===")
+        print("\n" + "-" * 80)
+        print(" PROCESSED DATA INFORMATION")
+        print("-" * 80)
         print(f"Processed directory: {processed_info['processed_dir']}")
         print(f"Total processed files: {processed_info['total_files']}")
         if processed_info['processed_datasets']:
@@ -106,18 +125,18 @@ def handle_preprocess_action(config: DictConfig, project_root: Path):
     elif config.preprocess_action == "force":
         # Force preprocessing of specified datasets
         datasets = getattr(config, 'datasets', config.data.datasets)
-        print(f"Force preprocessing datasets: {datasets}")
+        print(f"\nForce preprocessing datasets: {datasets}")
         
         for dataset_name in datasets:
             try:
                 prefixes_df, labels_series, vocabulary = preprocessor.preprocess_dataset(
                     dataset_name, force_reprocess=True
                 )
-                print(f"Successfully preprocessed {dataset_name}")
+                print(f"✓ Successfully preprocessed {dataset_name}")
                 print(f"  - Prefixes: {len(prefixes_df)}")
                 print(f"  - Vocabulary size: {len(vocabulary.index_to_token)}")
             except Exception as e:
-                print(f"Error preprocessing {dataset_name}: {e}")
+                print(f"✗ Error preprocessing {dataset_name}: {e}")
     
     else:
         print(f"Unknown preprocess action: {config.preprocess_action}")

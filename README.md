@@ -16,7 +16,7 @@ Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vida
 - Nutzung der von Rama-Maneiro et al. eingesetzten Logs (verschiedene Domänen & Komplexität)  
 - Ergänzend: eigener Datensatz aus der Tourismusbranche zur Überprüfung der Generalisierbarkeit  
 
-### Preprocessing
+### Preprocessinge 
 - Generierung von Präfixen unterschiedlicher Länge  
 - Kodierung der Aktivitäten  
 - Normalisierung numerischer Attribute  
@@ -29,7 +29,7 @@ Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vida
 - **5-fold Cross-Validation** mit Case-basierten Splits (verhindert Data Leakage)  
 - Innerhalb der Folds: 80/20-Split in Trainings- und Validierungsdaten  
 - Einheitliche Hardware: MacBook Pro (Apple M3 Pro, 36 GB RAM)  
-- Software: Python 3.13.5, PyTorch 2.8.0 (MPS)  
+- Software: Python 3.13.5, PyTorch 2.8.0 (MPS) oder TensorFlow, wenn vom Model benötigt.
 
 ### Metriken
 - Next Activity → **Accuracy**  

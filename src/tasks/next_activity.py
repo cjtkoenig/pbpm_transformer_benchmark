@@ -13,10 +13,10 @@ from sklearn import metrics
 
 from ..data.encoders import Vocabulary
 from ..data.preprocessor import SimplePreprocessor
-from ..data.loader import LogsDataLoader
+from ..data.loader import CanonicalLogsDataLoader
 from ..metrics import accuracy_score, f1_score, classification_report_metrics
 from ..utils.logging import create_logger
-from ..utils.cross_validation import run_cross_validation
+from ..utils.cross_validation import run_canonical_cross_validation
 
 
 class NextActivityTask:
@@ -35,29 +35,30 @@ class NextActivityTask:
         self.logger = None  # Will be initialized in run method
         self.current_dataset = None
         
-    def prepare_data(self, dataset_name: str, raw_directory: Path, processed_directory: Path, force_reprocess: bool = False) -> Tuple[pd.DataFrame, pd.Series, Vocabulary]:
-        """Load and prepare data for next activity prediction using ProcessTransformer pipeline."""
-        # First ensure data is processed using ProcessTransformer format
+    def prepare_data(self, dataset_name: str, raw_directory: Path, processed_directory: Path, force_reprocess: bool = False) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        """Load and prepare data for next activity prediction using canonical pipeline."""
+        # First ensure data is processed using canonical format
         preprocessor = SimplePreprocessor(raw_directory, processed_directory, self.config)
         if not preprocessor.is_processed(dataset_name) or force_reprocess:
-            preprocessor.preprocess_dataset(dataset_name, force_reprocess)
+            processing_info = preprocessor.preprocess_dataset(dataset_name, force_reprocess)
         
-        # Now use the ProcessTransformer loader
-        data_loader = LogsDataLoader(dataset_name, str(processed_directory))
+        # Now use the canonical loader
+        data_loader = CanonicalLogsDataLoader(dataset_name, str(processed_directory))
         
-        # Load data for next activity task
-        train_df, test_df, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("next_activity")
+        # Load all data for the task (we'll split by folds later)
+        # For now, we'll load fold 0 to get the structure
+        train_df, val_df = data_loader.load_fold_data("next_activity", 0)
+        combined_df = pd.concat([train_df, val_df], ignore_index=True)
         
-        # Combine train and test for cross-validation
-        combined_df = pd.concat([train_df, test_df], ignore_index=True)
+        # Get metadata
+        metadata = {
+            "x_word_dict": data_loader.x_word_dict,
+            "y_word_dict": data_loader.y_word_dict,
+            "vocab_size": data_loader.vocab_size,
+            "num_activities": data_loader.num_activities
+        }
         
-        # Create vocabulary from the metadata
-        vocabulary = Vocabulary(list(x_word_dict.keys()))
-        
-        # Create labels series
-        labels_series = combined_df["next_act"]
-        
-        return combined_df, labels_series, vocabulary
+        return combined_df, metadata
     
     def build_vocabulary(self, all_activity_tokens: List[str]) -> Vocabulary:
         """Build vocabulary from all activity tokens across datasets."""
@@ -99,40 +100,16 @@ class NextActivityTask:
                 loss='sparse_categorical_crossentropy',
                 metrics=['accuracy']
             )
-            
-            # Set up callbacks
-            callbacks = []
-            
-            # Model checkpointing
-            if checkpoint_dir:
-                checkpoint_callback = keras.callbacks.ModelCheckpoint(
-                    filepath=str(checkpoint_dir / "model-{epoch:02d}-{val_loss:.2f}.h5"),
-                    monitor='val_loss',
-                    mode='min',
-                    save_best_only=True,
-                    save_weights_only=False
-                )
-                callbacks.append(checkpoint_callback)
-            
-            # Early stopping
-            early_stopping = keras.callbacks.EarlyStopping(
-                monitor='val_loss',
-                patience=5,
-                mode='min',
-                verbose=True
-            )
-            callbacks.append(early_stopping)
-            
-            return callbacks
+            return model
         else:
             # PyTorch Lightning model
             callbacks = []
             
-            # Model checkpointing
             if checkpoint_dir:
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
                 checkpoint_callback = ModelCheckpoint(
-                    dirpath=str(checkpoint_dir),
-                    filename="model-{epoch:02d}-{val_loss:.2f}",
+                    dirpath=checkpoint_dir,
+                    filename='model-{epoch:02d}-{val_loss:.2f}',
                     monitor='val_loss',
                     mode='min',
                     save_top_k=3,
@@ -140,16 +117,13 @@ class NextActivityTask:
                 )
                 callbacks.append(checkpoint_callback)
             
-            # Early stopping
             early_stopping = EarlyStopping(
                 monitor='val_loss',
-                patience=5,
-                mode='min',
-                verbose=True
+                patience=self.config["train"].get("patience", 5),
+                mode='min'
             )
             callbacks.append(early_stopping)
             
-            # Create trainer
             trainer = lightning.Trainer(
                 max_epochs=self.config["train"]["max_epochs"],
                 accelerator=self.config["train"]["accelerator"],
@@ -161,135 +135,155 @@ class NextActivityTask:
             
             return trainer
     
-    def evaluate_model(self, model, test_data) -> Dict[str, float]:
-        """Evaluate the model and compute metrics."""
-        if isinstance(model, keras.Model):
-            # TensorFlow model evaluation
-            y_pred = np.argmax(model.predict(test_data[0]), axis=1)
-            y_true = test_data[1]
-        else:
-            # PyTorch Lightning model evaluation
-            model.eval()
-            with torch.no_grad():
-                outputs = model(test_data[0])
-                if isinstance(outputs, tuple):
-                    y_pred = torch.argmax(outputs[0], dim=1).cpu().numpy()
-                else:
-                    y_pred = torch.argmax(outputs, dim=1).cpu().numpy()
-                y_true = test_data[1].cpu().numpy()
-        
-        # Calculate metrics
-        accuracy = accuracy_score(y_true, y_pred)
-        f1 = f1_score(y_true, y_pred, average='weighted')
-        
-        return {
-            'accuracy': accuracy,
-            'f1_score': f1
-        }
-    
-    def train_and_evaluate_fold(self, train_prefixes: pd.DataFrame, train_labels: pd.Series,
-                               val_prefixes: pd.DataFrame, val_labels: pd.Series, 
-                               fold_idx: int) -> Dict[str, Any]:
+    def train_and_evaluate_fold(self, train_df: pd.DataFrame, val_df: pd.DataFrame, fold_idx: int) -> Dict[str, Any]:
         """
-        Train and evaluate a model on a single fold.
+        Train and evaluate model on a specific fold.
         
         Args:
-            train_prefixes: Training data prefixes
-            train_labels: Training labels
-            val_prefixes: Validation data prefixes
-            val_labels: Validation labels
-            fold_idx: Current fold index
+            train_df: Training data for this fold
+            val_df: Validation data for this fold
+            fold_idx: Fold index
             
         Returns:
-            Dictionary with fold results
+            Dictionary with training and evaluation results
         """
         print(f"Training fold {fold_idx + 1}...")
         
-        # Prepare data using ProcessTransformer format
-        data_loader = LogsDataLoader(self.current_dataset, str(Path(self.config["data"]["path_processed"])))
-        
-        # Get vocabulary and model parameters
-        _, _, x_word_dict, y_word_dict, max_case_length, vocab_size, total_classes = data_loader.load_data("next_activity")
-        
-        # Prepare training data
-        train_token_x, train_token_y = data_loader.prepare_data_next_activity(
-            train_prefixes, x_word_dict, y_word_dict, max_case_length
-        )
-        
-        # Prepare validation data
-        val_token_x, val_token_y = data_loader.prepare_data_next_activity(
-            val_prefixes, x_word_dict, y_word_dict, max_case_length
-        )
-        
-        # Create model
-        model = self.create_model(vocab_size, max_case_length=max_case_length, output_dim=total_classes)
-        
-        # Create checkpoint directory for this fold
-        checkpoint_dir = Path(self.config.get("outputs_dir", "outputs")) / "checkpoints" / self.current_dataset / f"fold_{fold_idx}"
+        # Create checkpoint directory
+        checkpoint_dir = Path("outputs/checkpoints") / self.current_dataset / f"fold_{fold_idx}"
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
-        if isinstance(model, keras.Model):
-            # TensorFlow model training
-            callbacks = self.create_trainer(model, checkpoint_dir)
+        # Create vocabulary from metadata
+        from ..data.loader import CanonicalLogsDataLoader
+        loader = CanonicalLogsDataLoader(self.current_dataset, str(Path(self.config["data"]["path_processed"])))
+        x_word_dict = loader.x_word_dict
+        y_word_dict = loader.y_word_dict
+        
+        # Create vocabulary
+        self.vocabulary = Vocabulary(list(x_word_dict.keys()))
+        
+        # Create model
+        vocab_size = len(self.vocabulary.index_to_token)
+        
+        # Get max_case_length from metadata to ensure consistency
+        max_case_length = loader.get_max_case_length(train_df)
+        
+        output_dim = len(y_word_dict)
+        
+        model = self.create_model(vocab_size, max_case_length, output_dim)
+        
+        # Create trainer
+        trainer = self.create_trainer(model, checkpoint_dir)
+        
+        # Train model
+        if isinstance(trainer, keras.Model):
+            # TensorFlow training
+            # Prepare data
+            x_train, y_train = self._prepare_tensorflow_data(train_df, max_case_length)
+            x_val, y_val = self._prepare_tensorflow_data(val_df, max_case_length)
             
-            # Train the model
-            history = model.fit(
-                train_token_x, train_token_y,
+            # Train
+            history = trainer.fit(
+                x_train, y_train,
+                validation_data=(x_val, y_val),
                 epochs=self.config["train"]["max_epochs"],
                 batch_size=self.config["train"]["batch_size"],
-                validation_data=(val_token_x, val_token_y),
-                shuffle=True,
-                verbose=1,
-                callbacks=callbacks
+                verbose=1
             )
             
-            # Evaluate on validation set
-            val_metrics = self.evaluate_model(model, (val_token_x, val_token_y))
+            # Evaluate
+            val_loss, val_accuracy = trainer.evaluate(x_val, y_val, verbose=0)
+            y_pred = trainer.predict(x_val, verbose=0)
+            y_pred_classes = np.argmax(y_pred, axis=1)
+            
+            # Calculate metrics
+            accuracy = accuracy_score(y_val, y_pred_classes)
+            f1 = f1_score(y_val, y_pred_classes, average='weighted')
+            
+            metrics = {
+                'val_loss': val_loss,
+                'val_accuracy': val_accuracy,
+                'accuracy': accuracy,
+                'f1_score': f1
+            }
             
         else:
-            # PyTorch Lightning model training
-            trainer = self.create_trainer(model, checkpoint_dir)
+            # PyTorch Lightning training
+            from ..training.datamodule import CanonicalNextActivityDataModule
             
-            # Create data module for this fold
-            from ..training.datamodule import NextActivityDataModule
-            datamodule = NextActivityDataModule(
-                train_df=train_prefixes,
-                test_df=val_prefixes,  # Use validation data as test for this fold
-                x_word_dict=x_word_dict,
-                y_word_dict=y_word_dict,
-                max_case_length=max_case_length,
+            # Create data module
+            datamodule = CanonicalNextActivityDataModule(
+                dataset_name=self.current_dataset,
+                task="next_activity",
+                fold_idx=fold_idx,
+                processed_dir=str(Path(self.config["data"]["path_processed"])),
                 batch_size=self.config["train"]["batch_size"]
             )
             
-            # Train the model
+            # Train
             trainer.fit(model, datamodule)
             
-            # Evaluate on validation set
-            test_results = trainer.test(model, datamodule)
-            val_metrics = {
-                'accuracy': test_results[0]['test_accuracy'],
-                'f1_score': test_results[0].get('test_f1_score', 0.0)
+            # Evaluate
+            results = trainer.validate(model, datamodule)
+            
+            # Extract metrics
+            metrics = {
+                'val_loss': results[0]['val_loss'],
+                'val_accuracy': results[0]['val_accuracy'],
+                'accuracy': results[0]['val_accuracy'],  # For compatibility
+                'f1_score': results[0].get('val_f1', 0.0)
             }
         
         return {
             'fold_idx': fold_idx,
-            'metrics': val_metrics,
-            'train_samples': len(train_prefixes),
-            'val_samples': len(val_prefixes)
+            'metrics': metrics,
+            'checkpoint_dir': str(checkpoint_dir)
         }
     
+    def _prepare_tensorflow_data(self, df: pd.DataFrame, max_case_length: int) -> Tuple[np.ndarray, np.ndarray]:
+        """Prepare data for TensorFlow training."""
+        # This is a simplified version - in practice, you'd use the canonical loader
+        x = df["prefix"].values
+        y = df["next_act"].values
+        
+        # Tokenize sequences
+        token_x = []
+        for _x in x:
+            token_x.append([self.vocabulary.token_to_index[s] for s in _x.split()])
+        
+        # Pad sequences to fixed length
+        token_x = tf.keras.preprocessing.sequence.pad_sequences(
+            token_x, maxlen=max_case_length, padding='post', truncating='post')
+        
+        # Tokenize labels using the same vocabulary as training
+        from ..data.loader import CanonicalLogsDataLoader
+        loader = CanonicalLogsDataLoader(self.current_dataset, str(Path(self.config["data"]["path_processed"])))
+        y_word_dict = loader.y_word_dict
+        token_y = np.array([y_word_dict[act] for act in y])
+        
+        return token_x, token_y
+    
     def run(self, datasets: List[str], raw_directory: Path, outputs_dir: Path) -> Dict[str, Any]:
-        """Run the next activity prediction task on multiple datasets using 5-fold cross-validation."""
-        processed_directory = Path(self.config["data"]["path_processed"])
-        processed_directory.mkdir(parents=True, exist_ok=True)
+        """
+        Run next activity prediction task on multiple datasets.
         
+        Args:
+            datasets: List of dataset names to process
+            raw_directory: Directory containing raw data
+            outputs_dir: Directory to save outputs
+            
+        Returns:
+            Dictionary with results for all datasets
+        """
         # Initialize logger
-        self.logger = create_logger(self.config, outputs_dir)
+        self.logger = create_logger("next_activity_task", outputs_dir)
         
-        # Store outputs_dir in config for use in train_and_evaluate_fold
-        self.config["outputs_dir"] = str(outputs_dir)
-
-        # Train and evaluate per dataset
+        # Set up processed directory
+        processed_directory = Path(self.config["data"]["path_processed"])
+        
+        # Check if force preprocessing is requested
+        force_reprocess = self.config.get("force_preprocess", False)
+        
         results = {}
         
         for dataset_name in datasets:
@@ -298,23 +292,25 @@ class NextActivityTask:
             
             try:
                 # Load and prepare data
-                prefixes_df, labels_series, vocabulary = self.prepare_data(
-                    dataset_name, raw_directory, processed_directory, 
-                    force_reprocess=self.config.get("force_preprocess", False)
+                combined_df, metadata = self.prepare_data(
+                    dataset_name, raw_directory, processed_directory, force_reprocess
                 )
                 
-                print(f"Total samples: {len(prefixes_df)}")
-                print(f"Vocabulary size: {len(vocabulary.index_to_token)}")
+                print(f"Total samples: {len(combined_df)}")
+                print(f"Vocabulary size: {metadata['vocab_size']}")
+                print(f"Number of activities: {metadata['num_activities']}")
                 
-                # Run 5-fold cross-validation
-                cv_results = run_cross_validation(
+                # Create vocabulary
+                self.vocabulary = Vocabulary(list(metadata["x_word_dict"].keys()))
+                
+                # Run canonical cross-validation
+                cv_results = run_canonical_cross_validation(
                     task_class=self.__class__,
                     config=self.config,
-                    prefixes_df=prefixes_df,
-                    labels_series=labels_series,
-                    vocabulary=vocabulary,
-                    cv_config=self.config["cv"],
-                    dataset_name=dataset_name
+                    df=combined_df,
+                    dataset_name=dataset_name,
+                    processed_dir=processed_directory,
+                    task_name="next_activity"
                 )
                 
                 # Store results
@@ -334,7 +330,7 @@ class NextActivityTask:
             except Exception as e:
                 print(f"Error processing {dataset_name}: {e}")
                 if self.logger:
-                    self.logger.error(f"Error processing {dataset_name}: {e}")
+                    print(f"Error processing {dataset_name}: {e}")
                 continue
         
         return results
