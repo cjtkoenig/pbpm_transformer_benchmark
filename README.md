@@ -2,22 +2,99 @@
 
 A comprehensive benchmark for Predictive Business Process Monitoring (PBPM) using Transformer models, following the methodology of Rama-Maneiro et al. (2021).
 
-## Overview
+## Benchmark-Setup
 
-This project implements a standardized benchmark for evaluating Transformer models in PBPM across four prediction tasks:
-- **Next Activity Prediction**: Predict the next activity in a process trace
-- **Suffix Prediction**: Predict the remaining sequence of activities
-- **Next Event Time Prediction**: Predict the time until the next event
-- **Remaining Time Prediction**: Predict the time until case completion
+Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vidal & Lama (2021) und stellt eine vergleichbare sowie reproduzierbare Evaluationsgrundlage im Predictive Business Process Monitoring (PBPM) sicher.
 
-## Features
+### Benchmark-Aufgaben
+- **Next Activity Prediction** – Vorhersage der nächsten Aktivität  
+- **Suffix Prediction** – Vorhersage des verbleibenden Aktivitätsverlaufs  
+- **Next Time Prediction** – Vorhersage der Zeit bis zum nächsten Event  
+- **Remaining Time Prediction** – Schätzung der Restlaufzeit eines Prozesses  
 
-- **Standardized Methodology**: Follows Rama-Maneiro et al. (2021) framework
-- **Multiple Datasets**: Support for real-world event logs including Tourism dataset
-- **Efficient Preprocessing**: Simple file-based preprocessing with automatic reuse
-- **Cross-Validation**: 5-fold cross-validation with case-based splitting
-- **Multiple Models**: PyTorch Lightning and TensorFlow/Keras implementations
-- **Comprehensive Metrics**: Task-specific evaluation metrics
+### Datensätze
+- Nutzung der von Rama-Maneiro et al. eingesetzten Logs (verschiedene Domänen & Komplexität)  
+- Ergänzend: eigener Datensatz aus der Tourismusbranche zur Überprüfung der Generalisierbarkeit  
+
+### Preprocessing
+- Generierung von Präfixen unterschiedlicher Länge  
+- Kodierung der Aktivitäten  
+- Normalisierung numerischer Attribute  
+- Hinzufügen eines *End-of-Case*-Tokens  
+- Zwei Varianten:  
+  - **Minimalistisch**: nur Aktivitäten  
+  - **Erweitert**: zusätzliche Attribute (falls Modellarchitektur unterstützt)  
+
+### Evaluation
+- **5-fold Cross-Validation**  
+- Innerhalb der Folds: 80/20-Split in Trainings- und Validierungsdaten  
+- Einheitliche Hardware: MacBook Pro (Apple M3 Pro, 36 GB RAM)  
+- Software: Python 3.13.5, PyTorch 2.8.0 (MPS)  
+
+### Metriken
+- Next Activity → **Accuracy**  
+- Suffix Prediction → **normalisierte Damerau-Levenshtein-Distanz**  
+- Zeitprognosen → **Mean Absolute Error (MAE)**  
+- Ergänzend: Trainingszeit, Inferenzzeit, Modellgröße  
+
+### Statistische Auswertung
+- Rangordnung der Modelle mittels **Plackett-Luce-Modell**  
+- Paarweise Vergleiche der Top-Modelle mit **hierarchischem Bayes-Test**  
+- Robustheitsprüfung durch **Friedman- / Wilcoxon-Tests**  
+
+### Modellauswahl
+- Berücksichtigt werden nur Modelle mit verfügbarer/zugänglicher Implementierung  
+- Fokus: **Transformer-Modelle** (seit 2020)  
+- Aktuell nur ProcessTransformer implementiert 
+
+## Model Adapters
+
+Um unterschiedliche Modellarchitekturen in den Benchmark einzubinden, wird ein **einheitliches, kanonisches Datenformat** genutzt.  
+Alle Datensätze werden **einmalig** vorverarbeitet (Präfix-Generierung, Kodierung, Normalisierung, Padding, Splits).  
+Diese Artefakte bestehen u. a. aus:
+
+- `X_{train,val,test}.npy` – Eingabesequenzen  
+- `y_{train,val,test}.npy` – Zielwerte (abhängig von der Benchmark-Aufgabe)  
+- `meta.json` – Metadaten (Vokabulare, `pad_id`, `eoc_id`, Normalisierungswerte, Feature-Liste, max. Präfixlänge)  
+- `splits.json` – fixe Case-IDs für Train/Val/Test  
+
+### Adapter-Konzept
+Da verschiedene Modelle Eingaben in unterschiedlicher Form erwarten, kommen **Adapter** zum Einsatz.  
+Adapter sind *leichte Umwandlungsschichten*, die nur die **Datenform** anpassen, nicht deren Inhalt.
+
+- **Erlaubt**:  
+  - Indizes ↔ One-Hot Konvertierung  
+  - Aufsplitten von `[B,T,D]` in mehrere Eingaben (z. B. Aktivitäten, Ressourcen, Zeitfeature)  
+  - Erzeugen von Attention-Masks aus `pad_id`  
+  - Änderung von Datentypen (`int64` → `int32`)  
+  - Padding/Clipping auf `max_prefix_len`  
+
+- **Nicht erlaubt**:  
+  - Neue Splits erstellen  
+  - Labels verschieben oder neu berechnen  
+  - Re-Kodierung von Aktivitäten/Vokabular  
+  - Abweichende Normalisierung oder Zeit-Einheiten  
+  - Daten augmentieren oder filtern  
+
+### Konformität mit dem Benchmark
+Die Benchmark-Invarianten gelten für **alle Modelle**:
+- Einheitliche **Tasks & Targets** (Next Activity, Next Time, Remaining Time, Suffix)  
+- Gleiche **Train/Val/Test-Splits** nach Case-ID  
+- Einheitliche **Preprocessing-Pipeline** (einmalig ausgeführt)  
+- Einheitliche **Metriken** pro Task  
+- Dokumentierte **Hardware-/Software-Umgebung**  
+
+Adapter sind somit nur „Stecker“, die gewährleisten, dass jedes Modell exakt dieselben Daten konsumiert – lediglich in der Form, die es benötigt.
+
+### Validierung
+- Hashes der kanonischen Artefakte werden veröffentlicht.  
+- Unit Tests prüfen u. a.:  
+  - Round-Trip Konsistenz (`argmax(one_hot(y)) == y_index`)  
+  - Masken entsprechen dem `pad_id`  
+  - Sample-Anzahl pro Split ist identisch über alle Adapter  
+
+Dieses Vorgehen stellt sicher, dass die Ergebnisse der Modelle **vergleichbar und reproduzierbar** bleiben.
+
 
 ## Quick Start
 
@@ -80,28 +157,6 @@ uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" force_pre
 # Clear processed data
 uv run python -m src.cli preprocess_action=clear
 ```
-
-## Available Models
-
-The benchmark supports multiple transformer models:
-
-### Process Transformer
-- **Framework**: TensorFlow/Keras
-- **Description**: Standard transformer model for PBPM tasks
-- **Usage**: `model.name=process_transformer`
-
-### MTLFormer
-- **Framework**: TensorFlow/Keras  
-- **Description**: Multi-Task Learning Transformer for PBPM tasks (Single Task Models)
-- **Usage**: `model.name=mtlformer`
-- **Note**: Implements the same architecture as Process Transformer, taken from the original repository
-
-### MTLFormer Multi-Task
-- **Framework**: TensorFlow/Keras  
-- **Description**: True Multi-Task Learning Transformer with shared parameters across all tasks
-- **Usage**: `model.name=mtlformer_multi`
-- **Task**: `task=multi_task`
-- **Note**: Creates a single model with three outputs (next_activity, next_time, remaining_time) that shares parameters
 
 ## Configuration
 
