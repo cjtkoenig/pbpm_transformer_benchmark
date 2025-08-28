@@ -76,3 +76,4 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+data/raw/BPI_Challenge_2019.csv
