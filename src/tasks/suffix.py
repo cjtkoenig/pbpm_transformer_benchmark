@@ -47,7 +47,7 @@ class SuffixTask:
         
         # Load all data for the task (we'll split by folds later)
         # For now, we'll load fold 0 to get the structure
-        train_df, val_df = data_loader.load_fold_data("next_activity", 0)  # Use next_activity data for suffix
+        train_df, val_df = data_loader.load_fold_data("suffix", 0)
         combined_df = pd.concat([train_df, val_df], ignore_index=True)
         
         # Get metadata
@@ -81,7 +81,7 @@ class SuffixTask:
         if max_case_length is None:
             max_case_length = self.config["model"].get("max_case_length", 50)
         return create_model(
-            name="process_transformer",
+            name=self.config["model"].get("name", "process_transformer"),
             task="suffix",
             vocab_size=vocab_size,
             max_case_length=max_case_length,
@@ -100,6 +100,13 @@ class SuffixTask:
                 loss='sparse_categorical_crossentropy',
                 metrics=['accuracy']
             )
+            self._tf_early_stopping = keras.callbacks.EarlyStopping(
+                monitor=self.config.get("train", {}).get("early_stopping_monitor", "val_loss"),
+                patience=self.config.get("train", {}).get("early_stopping_patience", None) or 0,
+                min_delta=self.config.get("train", {}).get("early_stopping_min_delta", 0.0),
+                mode=self.config.get("train", {}).get("early_stopping_mode", "min"),
+                restore_best_weights=True
+            ) if self.config.get("train", {}).get("early_stopping_patience", None) is not None else None
             return model
         else:
             # PyTorch Lightning model
@@ -156,14 +163,22 @@ class SuffixTask:
         # Create model
         vocab_size = len(self.vocabulary.index_to_token)
         max_case_length = max(len(prefix.split()) for prefix in train_df["prefix"])
-        output_dim = len(set(train_df["next_act"].unique()) | set(val_df["next_act"].unique()))
+        # For suffix we currently reuse next-activity style classifier as placeholder
+        output_dim = len(self.vocabulary.index_to_token)  # broad upper bound
         
         model = self.create_model(vocab_size, max_case_length, output_dim)
         
         # Create trainer
         trainer = self.create_trainer(model, checkpoint_dir)
         
+        # Prepare metrics output dir
+        model_name = self.config.get("model", {}).get("name", "unknown_model")
+        metrics_dir = Path("outputs") / self.current_dataset / "suffix" / model_name / f"fold_{fold_idx}"
+        metrics_dir.mkdir(parents=True, exist_ok=True)
+        
         # Train model
+        import time, json as _json
+        start_time = time.time()
         if isinstance(trainer, keras.Model):
             # TensorFlow training
             # Prepare data
@@ -171,58 +186,51 @@ class SuffixTask:
             x_val, y_val = self._prepare_tensorflow_data(val_df)
             
             # Train
+            callbacks = []
+            if getattr(self, "_tf_early_stopping", None) is not None:
+                callbacks.append(self._tf_early_stopping)
             history = trainer.fit(
                 x_train, y_train,
                 validation_data=(x_val, y_val),
                 epochs=self.config["train"]["max_epochs"],
                 batch_size=self.config["train"]["batch_size"],
+                callbacks=callbacks if callbacks else None,
                 verbose=1
             )
             
             # Evaluate
+            eval_start = time.time()
             val_loss, val_accuracy = trainer.evaluate(x_val, y_val, verbose=0)
             y_pred = trainer.predict(x_val, verbose=0)
+            infer_time = time.time() - eval_start
             y_pred_classes = np.argmax(y_pred, axis=1)
             
-            # Calculate metrics
-            accuracy = val_accuracy
-            # For suffix prediction, we'd need to calculate sequence-level metrics
-            # This is a simplified version
-            suffix_distance = 0.0  # Placeholder for actual suffix distance calculation
+            # Calculate metrics (placeholder for true sequence metrics)
+            accuracy = float(val_accuracy)
+            suffix_distance = 0.0  # TODO: compute normalized Damerau-Levenshtein over predicted suffixes
+            param_count = int(trainer.count_params())
+            train_time = time.time() - start_time
             
             metrics = {
-                'val_loss': val_loss,
-                'val_accuracy': val_accuracy,
-                'accuracy': accuracy,
-                'suffix_distance': suffix_distance
+                'val_loss': float(val_loss),
+                'val_accuracy': float(val_accuracy),
+                'accuracy': float(accuracy),
+                'suffix_distance': float(suffix_distance),
+                'train_time_sec': float(train_time),
+                'infer_time_sec': float(infer_time),
+                'param_count': param_count
             }
             
         else:
-            # PyTorch Lightning training
-            from ..training.datamodule import CanonicalNextActivityDataModule
-            
-            # Create data module
-            datamodule = CanonicalNextActivityDataModule(
-                dataset_name=self.current_dataset,
-                task="next_activity",  # Use next_activity data for suffix prediction
-                fold_idx=fold_idx,
-                processed_dir=str(Path(self.config["data"]["path_processed"])),
-                batch_size=self.config["train"]["batch_size"]
-            )
-            
-            # Train
-            trainer.fit(model, datamodule)
-            
-            # Evaluate
-            results = trainer.validate(model, datamodule)
-            
-            # Extract metrics
-            metrics = {
-                'val_loss': results[0]['val_loss'],
-                'val_accuracy': results[0]['val_accuracy'],
-                'accuracy': results[0]['val_accuracy'],  # For compatibility
-                'suffix_distance': 0.0  # Placeholder
-            }
+            # PyTorch Lightning path for suffix is not implemented yet.
+            raise NotImplementedError("Suffix task for PyTorch is not implemented yet. Use TensorFlow path.")
+        
+        # Persist metrics.json
+        try:
+            with open(metrics_dir / "metrics.json", 'w') as f:
+                _json.dump(metrics, f, indent=2)
+        except Exception as e:
+            print(f"Warning: failed to write metrics.json: {e}")
         
         return {
             'fold_idx': fold_idx,

@@ -81,7 +81,7 @@ class NextActivityTask:
         if max_case_length is None:
             max_case_length = self.config["model"].get("max_case_length", 50)
         return create_model(
-            name="process_transformer",
+            name=self.config["model"].get("name", "process_transformer"),
             task="next_activity",
             vocab_size=vocab_size,
             max_case_length=max_case_length,
@@ -100,6 +100,14 @@ class NextActivityTask:
                 loss='sparse_categorical_crossentropy',
                 metrics=['accuracy']
             )
+            # Attach TF early stopping params via config (used in fit callbacks)
+            self._tf_early_stopping = keras.callbacks.EarlyStopping(
+                monitor=self.config.get("train", {}).get("early_stopping_monitor", "val_loss"),
+                patience=self.config.get("train", {}).get("early_stopping_patience", None) or 0,
+                min_delta=self.config.get("train", {}).get("early_stopping_min_delta", 0.0),
+                mode=self.config.get("train", {}).get("early_stopping_mode", "min"),
+                restore_best_weights=True
+            ) if self.config.get("train", {}).get("early_stopping_patience", None) is not None else None
             return model
         else:
             # PyTorch Lightning model
@@ -118,9 +126,10 @@ class NextActivityTask:
                 callbacks.append(checkpoint_callback)
             
             early_stopping = EarlyStopping(
-                monitor='val_loss',
-                patience=self.config["train"].get("patience", 5),
-                mode='min'
+                monitor=self.config["train"].get("early_stopping_monitor", 'val_loss'),
+                patience=self.config["train"].get("early_stopping_patience", 5),
+                mode=self.config["train"].get("early_stopping_mode", 'min'),
+                min_delta=self.config["train"].get("early_stopping_min_delta", 0.0)
             )
             callbacks.append(early_stopping)
             
@@ -152,6 +161,11 @@ class NextActivityTask:
         # Create checkpoint directory
         checkpoint_dir = Path("outputs/checkpoints") / self.current_dataset / f"fold_{fold_idx}"
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        # Prepare metrics output dir
+        model_name = self.config.get("model", {}).get("name", "unknown_model")
+        metrics_dir = Path("outputs") / self.current_dataset / "next_activity" / model_name / f"fold_{fold_idx}"
+        metrics_dir.mkdir(parents=True, exist_ok=True)
         
         # Create vocabulary from metadata
         from ..data.loader import CanonicalLogsDataLoader
@@ -165,8 +179,13 @@ class NextActivityTask:
         # Create model
         vocab_size = len(self.vocabulary.index_to_token)
         
-        # Get max_case_length from metadata to ensure consistency
-        max_case_length = loader.get_max_case_length(train_df)
+        # Get max_case_length from metadata and allow trimming via config
+        observed_max = loader.get_max_case_length(train_df)
+        cfg_data_max = self.config.get("data", {}).get("max_prefix_length")
+        cfg_model_max = self.config.get("model", {}).get("max_case_length")
+        # pick the minimum positive integer among observed and configured limits
+        limits = [v for v in [observed_max, cfg_data_max, cfg_model_max] if v is not None]
+        max_case_length = min(limits) if limits else observed_max
         
         output_dim = len(y_word_dict)
         
@@ -176,6 +195,8 @@ class NextActivityTask:
         trainer = self.create_trainer(model, checkpoint_dir)
         
         # Train model
+        import time, json as _json
+        start_time = time.time()
         if isinstance(trainer, keras.Model):
             # TensorFlow training
             # Prepare data
@@ -183,28 +204,39 @@ class NextActivityTask:
             x_val, y_val = self._prepare_tensorflow_data(val_df, max_case_length)
             
             # Train
+            callbacks = []
+            if getattr(self, "_tf_early_stopping", None) is not None:
+                callbacks.append(self._tf_early_stopping)
             history = trainer.fit(
                 x_train, y_train,
                 validation_data=(x_val, y_val),
                 epochs=self.config["train"]["max_epochs"],
                 batch_size=self.config["train"]["batch_size"],
+                callbacks=callbacks if callbacks else None,
                 verbose=1
             )
+            train_time = time.time() - start_time
             
             # Evaluate
+            eval_start = time.time()
             val_loss, val_accuracy = trainer.evaluate(x_val, y_val, verbose=0)
             y_pred = trainer.predict(x_val, verbose=0)
+            infer_time = time.time() - eval_start
             y_pred_classes = np.argmax(y_pred, axis=1)
             
             # Calculate metrics
             accuracy = accuracy_score(y_val, y_pred_classes)
             f1 = f1_score(y_val, y_pred_classes, average='weighted')
+            param_count = int(trainer.count_params())
             
             metrics = {
-                'val_loss': val_loss,
-                'val_accuracy': val_accuracy,
-                'accuracy': accuracy,
-                'f1_score': f1
+                'val_loss': float(val_loss),
+                'val_accuracy': float(val_accuracy),
+                'accuracy': float(accuracy),
+                'f1_score': float(f1),
+                'train_time_sec': float(train_time),
+                'infer_time_sec': float(infer_time),
+                'param_count': param_count
             }
             
         else:
@@ -222,17 +254,39 @@ class NextActivityTask:
             
             # Train
             trainer.fit(model, datamodule)
+            train_time = time.time() - start_time
             
             # Evaluate
+            eval_start = time.time()
             results = trainer.validate(model, datamodule)
+            infer_time = time.time() - eval_start
             
             # Extract metrics
+            res0 = results[0] if isinstance(results, list) and results else {}
+            val_loss = float(res0.get('val_loss', 0.0))
+            val_acc = float(res0.get('val_accuracy', 0.0))
+            f1v = float(res0.get('val_f1', 0.0))
+            # parameter count if available
+            try:
+                param_count = int(sum(p.numel() for p in model.parameters()))
+            except Exception:
+                param_count = 0
             metrics = {
-                'val_loss': results[0]['val_loss'],
-                'val_accuracy': results[0]['val_accuracy'],
-                'accuracy': results[0]['val_accuracy'],  # For compatibility
-                'f1_score': results[0].get('val_f1', 0.0)
+                'val_loss': val_loss,
+                'val_accuracy': val_acc,
+                'accuracy': val_acc,  # For compatibility
+                'f1_score': f1v,
+                'train_time_sec': float(train_time),
+                'infer_time_sec': float(infer_time),
+                'param_count': param_count
             }
+        
+        # Persist metrics.json
+        try:
+            with open(metrics_dir / "metrics.json", 'w') as f:
+                _json.dump(metrics, f, indent=2)
+        except Exception as e:
+            print(f"Warning: failed to write metrics.json: {e}")
         
         return {
             'fold_idx': fold_idx,

@@ -40,7 +40,6 @@ checkpoints/
 data/processed/*
 !data/processed/.gitkeep
 data/raw/*.csv
-data/raw/*.xes
 !data/raw/.gitkeep
 
 # IDE

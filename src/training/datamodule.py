@@ -259,17 +259,30 @@ class CanonicalNextTimeDataModule(lightning.LightningDataModule):
     def setup(self, stage: Optional[str] = None):
         """Set up datasets for training and validation."""
         if stage == "fit" or stage is None:
-            # Fit scalers on training data
-            from sklearn.preprocessing import StandardScaler
-            
-            train_time_x = self.train_df[["recent_time", "latest_time", "time_passed"]].values.astype(np.float32)
-            train_y = self.train_df["next_time"].values.astype(np.float32)
-            
-            self.time_scaler = StandardScaler()
-            self.time_scaler.fit(train_time_x)
-            
-            self.y_scaler = StandardScaler()
-            self.y_scaler.fit(train_y.reshape(-1, 1))
+            # Load persisted scalers if available; otherwise fit and persist
+            import pickle
+            from pathlib import Path as _Path
+            fold_dir = _Path(self.processed_dir) / self.dataset_name / "splits" / self.task / f"fold_{self.fold_idx}"
+            time_scaler_path = fold_dir / f"time_scaler_{self.task}.pkl"
+            y_scaler_path = fold_dir / f"y_scaler_{self.task}.pkl"
+
+            if time_scaler_path.exists() and y_scaler_path.exists():
+                with open(time_scaler_path, "rb") as f:
+                    self.time_scaler = pickle.load(f)
+                with open(y_scaler_path, "rb") as f:
+                    self.y_scaler = pickle.load(f)
+            else:
+                from sklearn.preprocessing import StandardScaler
+                train_time_x = self.train_df[["recent_time", "latest_time", "time_passed"]].values.astype(np.float32)
+                train_y = self.train_df["next_time"].values.astype(np.float32)
+                self.time_scaler = StandardScaler().fit(train_time_x)
+                self.y_scaler = StandardScaler().fit(train_y.reshape(-1, 1))
+                # Persist for reproducibility
+                fold_dir.mkdir(parents=True, exist_ok=True)
+                with open(time_scaler_path, "wb") as f:
+                    pickle.dump(self.time_scaler, f)
+                with open(y_scaler_path, "wb") as f:
+                    pickle.dump(self.y_scaler, f)
             
             self.train_dataset = CanonicalNextTimeDataset(
                 self.train_df, self.data_loader.x_word_dict, 
@@ -326,17 +339,30 @@ class CanonicalRemainingTimeDataModule(lightning.LightningDataModule):
     def setup(self, stage: Optional[str] = None):
         """Set up datasets for training and validation."""
         if stage == "fit" or stage is None:
-            # Fit scalers on training data
-            from sklearn.preprocessing import StandardScaler
-            
-            train_time_x = self.train_df[["recent_time", "latest_time", "time_passed"]].values.astype(np.float32)
-            train_y = self.train_df["remaining_time_days"].values.astype(np.float32)
-            
-            self.time_scaler = StandardScaler()
-            self.time_scaler.fit(train_time_x)
-            
-            self.y_scaler = StandardScaler()
-            self.y_scaler.fit(train_y.reshape(-1, 1))
+            # Load persisted scalers if available; otherwise fit and persist
+            import pickle
+            from pathlib import Path as _Path
+            fold_dir = _Path(self.processed_dir) / self.dataset_name / "splits" / self.task / f"fold_{self.fold_idx}"
+            time_scaler_path = fold_dir / f"time_scaler_{self.task}.pkl"
+            y_scaler_path = fold_dir / f"y_scaler_{self.task}.pkl"
+
+            if time_scaler_path.exists() and y_scaler_path.exists():
+                with open(time_scaler_path, "rb") as f:
+                    self.time_scaler = pickle.load(f)
+                with open(y_scaler_path, "rb") as f:
+                    self.y_scaler = pickle.load(f)
+            else:
+                from sklearn.preprocessing import StandardScaler
+                train_time_x = self.train_df[["recent_time", "latest_time", "time_passed"]].values.astype(np.float32)
+                train_y = self.train_df["remaining_time_days"].values.astype(np.float32)
+                self.time_scaler = StandardScaler().fit(train_time_x)
+                self.y_scaler = StandardScaler().fit(train_y.reshape(-1, 1))
+                # Persist for reproducibility
+                fold_dir.mkdir(parents=True, exist_ok=True)
+                with open(time_scaler_path, "wb") as f:
+                    pickle.dump(self.time_scaler, f)
+                with open(y_scaler_path, "wb") as f:
+                    pickle.dump(self.y_scaler, f)
             
             self.train_dataset = CanonicalRemainingTimeDataset(
                 self.train_df, self.data_loader.x_word_dict, 

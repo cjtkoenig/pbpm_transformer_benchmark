@@ -67,7 +67,7 @@ run: dirs
 # Run with custom dataset
 run_dataset: dirs
 	@echo "Usage: make run_dataset DATASET=your_dataset_name"
-	@echo "Example: make run_dataset DATASET=helpdesk"
+	@echo "Example: make run_dataset DATASET=Helpdesk"
 	@if [ -z "$(DATASET)" ]; then \
 		echo "Error: Please specify DATASET=your_dataset_name"; \
 		exit 1; \

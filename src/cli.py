@@ -6,10 +6,6 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 
 from src.utils.seeding import set_all_seeds
-from src.tasks.next_activity import NextActivityTask
-from src.tasks.suffix import SuffixTask
-from src.tasks.next_time import NextTimeTask
-from src.tasks.remaining_time import RemainingTimeTask
 from src.data.preprocessor import SimplePreprocessor
 
 
@@ -39,6 +35,14 @@ def main(config: DictConfig):
     # Convert config to dict for task usage
     config_dict = OmegaConf.to_container(config, resolve=True)
     
+    # Handle analysis management commands
+    if hasattr(config, 'analysis') and getattr(config.analysis, 'action', None) == 'run_stats':
+        from src.analysis.stat_tests import run_stats
+        report = run_stats(str(project_root / "outputs"))
+        print("\nAnalysis summary saved to outputs/analysis/summary.json")
+        print(json.dumps(report, indent=2))
+        return
+
     # Handle preprocessing management commands
     if hasattr(config, 'preprocess_action') and config.preprocess_action:
         handle_preprocess_action(config, project_root)
@@ -46,6 +50,7 @@ def main(config: DictConfig):
     
     # Route to appropriate task based on config
     if config.task == "next_activity":
+        from src.tasks.next_activity import NextActivityTask
         task = NextActivityTask(config_dict)
         results = task.run(
             datasets=config.data.datasets,
@@ -55,6 +60,7 @@ def main(config: DictConfig):
         print(f"\n✓ Next Activity Task completed successfully")
         print(f"  Results saved to outputs/")
     elif config.task == "suffix":
+        from src.tasks.suffix import SuffixTask
         task = SuffixTask(config_dict)
         results = task.run(
             datasets=config.data.datasets,
@@ -64,6 +70,7 @@ def main(config: DictConfig):
         print(f"\n✓ Suffix Task completed successfully")
         print(f"  Results saved to outputs/")
     elif config.task == "next_time":
+        from src.tasks.next_time import NextTimeTask
         task = NextTimeTask(config_dict)
         results = task.run(
             datasets=config.data.datasets,
@@ -73,6 +80,7 @@ def main(config: DictConfig):
         print(f"\n✓ Next Time Task completed successfully")
         print(f"  Results saved to outputs/")
     elif config.task == "remaining_time":
+        from src.tasks.remaining_time import RemainingTimeTask
         task = RemainingTimeTask(config_dict)
         results = task.run(
             datasets=config.data.datasets,
@@ -81,16 +89,39 @@ def main(config: DictConfig):
         )
         print(f"\n✓ Remaining Time Task completed successfully")
         print(f"  Results saved to outputs/")
+    elif config.task == "multitask":
+        from src.tasks.multitask import MultiTaskLearningTask
+        task = MultiTaskLearningTask(config_dict)
+        results = task.run(
+            datasets=config.data.datasets,
+            raw_directory=project_root / config.data.path_raw,
+            outputs_dir=outputs_dir
+        )
+        print(f"\n✓ Multi-Task Learning completed successfully")
+        print(f"  Results saved to outputs/")
 
     else:
         raise ValueError(f"Task '{config.task}' not implemented yet")
 
-    # Minimal environment capture
+    # Minimal environment capture (extended)
+    try:
+        import tensorflow as tf
+        tf_version = tf.__version__
+    except Exception:
+        tf_version = None
+    import sys, platform
     env_info = {
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
         "torch": torch.__version__,
+        "tensorflow": tf_version,
         "accelerator": config.train.accelerator,
+        "mps": bool(getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available()),
+        "cuda": torch.cuda.is_available(),
+        "devices": int(getattr(config.train, 'devices', 1)),
         "seed": int(config.seed),
-        "task": config.task
+        "task": config.task,
+        "model": config.model.name,
     }
     (outputs_dir / "env.json").write_text(json.dumps(env_info, indent=2))
     print(f"\nEnvironment info saved to outputs/env.json")
@@ -129,12 +160,22 @@ def handle_preprocess_action(config: DictConfig, project_root: Path):
         
         for dataset_name in datasets:
             try:
-                prefixes_df, labels_series, vocabulary = preprocessor.preprocess_dataset(
+                processing_info = preprocessor.preprocess_dataset(
                     dataset_name, force_reprocess=True
                 )
                 print(f"✓ Successfully preprocessed {dataset_name}")
-                print(f"  - Prefixes: {len(prefixes_df)}")
-                print(f"  - Vocabulary size: {len(vocabulary.index_to_token)}")
+                # Report canonical summary consistent with new preprocessing pipeline
+                vocab = processing_info.get("vocabularies", {})
+                x_word_dict = vocab.get("x_word_dict", {})
+                y_word_dict = vocab.get("y_word_dict", {})
+                total_cases = processing_info.get("total_cases")
+                total_events = processing_info.get("total_events")
+                tasks = processing_info.get("tasks", [])
+                if total_cases is not None and total_events is not None:
+                    print(f"  - Cases: {total_cases}, Events: {total_events}")
+                print(f"  - Vocabulary size: {len(x_word_dict) if isinstance(x_word_dict, dict) else 'n/a'} (input), {len(y_word_dict) if isinstance(y_word_dict, dict) else 'n/a'} (labels)")
+                if tasks:
+                    print(f"  - Tasks prepared: {', '.join(tasks)}")
             except Exception as e:
                 print(f"✗ Error preprocessing {dataset_name}: {e}")
     

@@ -81,7 +81,7 @@ class RemainingTimeTask:
         if max_case_length is None:
             max_case_length = self.config["model"].get("max_case_length", 50)
         return create_model(
-            name="process_transformer",
+            name=self.config["model"].get("name", "process_transformer"),
             task="remaining_time",
             vocab_size=vocab_size,
             max_case_length=max_case_length,
@@ -100,6 +100,13 @@ class RemainingTimeTask:
                 loss='mse',
                 metrics=['mae']
             )
+            self._tf_early_stopping = keras.callbacks.EarlyStopping(
+                monitor=self.config.get("train", {}).get("early_stopping_monitor", "val_loss"),
+                patience=self.config.get("train", {}).get("early_stopping_patience", None) or 0,
+                min_delta=self.config.get("train", {}).get("early_stopping_min_delta", 0.0),
+                mode=self.config.get("train", {}).get("early_stopping_mode", "min"),
+                restore_best_weights=True
+            ) if self.config.get("train", {}).get("early_stopping_patience", None) is not None else None
             return model
         else:
             # PyTorch Lightning model
@@ -118,9 +125,10 @@ class RemainingTimeTask:
                 callbacks.append(checkpoint_callback)
             
             early_stopping = EarlyStopping(
-                monitor='val_loss',
-                patience=self.config["train"].get("patience", 5),
-                mode='min'
+                monitor=self.config["train"].get("early_stopping_monitor", 'val_loss'),
+                patience=self.config["train"].get("early_stopping_patience", 5),
+                mode=self.config["train"].get("early_stopping_mode", 'min'),
+                min_delta=self.config["train"].get("early_stopping_min_delta", 0.0)
             )
             callbacks.append(early_stopping)
             
@@ -153,9 +161,25 @@ class RemainingTimeTask:
         checkpoint_dir = Path("outputs/checkpoints") / self.current_dataset / f"fold_{fold_idx}"
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create model
+        # Prepare metrics output dir
+        model_name = self.config.get("model", {}).get("name", "unknown_model")
+        metrics_dir = Path("outputs") / self.current_dataset / "remaining_time" / model_name / f"fold_{fold_idx}"
+        metrics_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create vocabulary from metadata (recreate per fold due to fresh task instance)
+        from ..data.loader import CanonicalLogsDataLoader
+        loader = CanonicalLogsDataLoader(self.current_dataset, str(Path(self.config["data"]["path_processed"])))
+        x_word_dict = loader.x_word_dict
+        # Initialize vocabulary
+        self.vocabulary = Vocabulary(list(x_word_dict.keys()))
+        
+        # Determine model dims
         vocab_size = len(self.vocabulary.index_to_token)
-        max_case_length = max(len(prefix.split()) for prefix in train_df["prefix"])
+        observed_max = loader.get_max_case_length(train_df)
+        cfg_data_max = self.config.get("data", {}).get("max_prefix_length")
+        cfg_model_max = self.config.get("model", {}).get("max_case_length")
+        limits = [v for v in [observed_max, cfg_data_max, cfg_model_max] if v is not None]
+        max_case_length = min(limits) if limits else observed_max
         
         model = self.create_model(vocab_size, max_case_length, output_dim=1)
         
@@ -163,36 +187,51 @@ class RemainingTimeTask:
         trainer = self.create_trainer(model, checkpoint_dir)
         
         # Train model
+        import time, json as _json
+        start_time = time.time()
         if isinstance(trainer, keras.Model):
             # TensorFlow training
             # Prepare data
-            x_train, time_x_train, y_train = self._prepare_tensorflow_data(train_df)
-            x_val, time_x_val, y_val = self._prepare_tensorflow_data(val_df)
+            x_train, time_x_train, y_train = self._prepare_tensorflow_data(train_df, max_case_length)
+            x_val, time_x_val, y_val = self._prepare_tensorflow_data(val_df, max_case_length)
             
             # Train
+            callbacks = []
+            if getattr(self, "_tf_early_stopping", None) is not None:
+                callbacks.append(self._tf_early_stopping)
             history = trainer.fit(
                 [x_train, time_x_train], y_train,
                 validation_data=([x_val, time_x_val], y_val),
                 epochs=self.config["train"]["max_epochs"],
                 batch_size=self.config["train"]["batch_size"],
+                callbacks=callbacks if callbacks else None,
                 verbose=1
             )
+            train_time = time.time() - start_time
             
             # Evaluate
+            eval_start = time.time()
             val_loss, val_mae = trainer.evaluate([x_val, time_x_val], y_val, verbose=0)
             y_pred = trainer.predict([x_val, time_x_val], verbose=0)
+            infer_time = time.time() - eval_start
             
-            # Calculate metrics
-            mae = mean_absolute_error(y_val, y_pred)
-            mse = mean_squared_error(y_val, y_pred)
-            r2 = r2_score(y_val, y_pred)
+            # Calculate metrics (ensure matching 1D shapes)
+            y_true = np.asarray(y_val).reshape(-1)
+            y_hat = np.asarray(y_pred).reshape(-1)
+            mae = float(mean_absolute_error(y_true, y_hat))
+            mse = float(mean_squared_error(y_true, y_hat))
+            r2 = float(r2_score(y_true, y_hat))
+            param_count = int(trainer.count_params())
             
             metrics = {
-                'val_loss': val_loss,
-                'val_mae': val_mae,
+                'val_loss': float(val_loss),
+                'val_mae': float(val_mae),
                 'mae': mae,
                 'mse': mse,
-                'r2': r2
+                'r2': r2,
+                'train_time_sec': float(train_time),
+                'infer_time_sec': float(infer_time),
+                'param_count': param_count
             }
             
         else:
@@ -210,18 +249,40 @@ class RemainingTimeTask:
             
             # Train
             trainer.fit(model, datamodule)
+            train_time = time.time() - start_time
             
             # Evaluate
+            eval_start = time.time()
             results = trainer.validate(model, datamodule)
+            infer_time = time.time() - eval_start
             
             # Extract metrics
+            res0 = results[0] if isinstance(results, list) and results else {}
+            val_loss = float(res0.get('val_loss', 0.0))
+            val_mae = float(res0.get('val_mae', 0.0))
+            mse = float(res0.get('val_mse', 0.0))
+            r2 = float(res0.get('val_r2', 0.0))
+            try:
+                param_count = int(sum(p.numel() for p in model.parameters()))
+            except Exception:
+                param_count = 0
             metrics = {
-                'val_loss': results[0]['val_loss'],
-                'val_mae': results[0].get('val_mae', 0.0),
-                'mae': results[0].get('val_mae', 0.0),  # For compatibility
-                'mse': results[0].get('val_mse', 0.0),
-                'r2': results[0].get('val_r2', 0.0)
+                'val_loss': val_loss,
+                'val_mae': val_mae,
+                'mae': val_mae,  # For compatibility
+                'mse': mse,
+                'r2': r2,
+                'train_time_sec': float(train_time),
+                'infer_time_sec': float(infer_time),
+                'param_count': param_count
             }
+        
+        # Persist metrics.json
+        try:
+            with open(metrics_dir / "metrics.json", 'w') as f:
+                _json.dump(metrics, f, indent=2)
+        except Exception as e:
+            print(f"Warning: failed to write metrics.json: {e}")
         
         return {
             'fold_idx': fold_idx,
@@ -229,9 +290,8 @@ class RemainingTimeTask:
             'checkpoint_dir': str(checkpoint_dir)
         }
     
-    def _prepare_tensorflow_data(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Prepare data for TensorFlow training."""
-        # This is a simplified version - in practice, you'd use the canonical loader
+    def _prepare_tensorflow_data(self, df: pd.DataFrame, max_case_length: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Prepare data for TensorFlow training with fixed padding to max_case_length."""
         x = df["prefix"].values
         time_x = df[["recent_time", "latest_time", "time_passed"]].values.astype(np.float32)
         y = df["remaining_time_days"].values.astype(np.float32)
@@ -241,10 +301,9 @@ class RemainingTimeTask:
         for _x in x:
             token_x.append([self.vocabulary.token_to_index[s] for s in _x.split()])
         
-        # Pad sequences
-        max_length = max(len(seq) for seq in token_x)
+        # Pad sequences to the model's fixed max_case_length
         token_x = tf.keras.preprocessing.sequence.pad_sequences(
-            token_x, maxlen=max_length, padding='post', truncating='post')
+            token_x, maxlen=max_case_length, padding='post', truncating='post')
         
         return token_x, time_x, y
     

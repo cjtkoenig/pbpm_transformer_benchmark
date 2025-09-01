@@ -13,6 +13,8 @@ import torch.nn as nn
 from .process_transformer import (
     get_next_activity_model, get_next_time_model, get_remaining_time_model
 )
+from .mtlformer import get_predict_model as get_mtlformer_model
+from .mtlformer import TokenAndPositionEmbedding, TransformerBlock
 
 
 class ModelAdapter:
@@ -109,6 +111,11 @@ class ModelRegistry:
                 "factory": self._create_process_transformer,
                 "adapter": ProcessTransformerAdapter
             },
+            "mtlformer": {
+                "framework": "tensorflow",
+                "factory": self._create_mtlformer,
+                "adapter": ProcessTransformerAdapter  # will override via get_adapter for custom handling if needed
+            },
             "bert_process": {
                 "framework": "pytorch", 
                 "factory": self._create_bert_model,
@@ -196,6 +203,123 @@ class ModelRegistry:
         # This is a placeholder for future BERT model implementation
         raise NotImplementedError("BERT model not yet implemented")
     
+    def _create_mtlformer(self, task: str, **kwargs) -> keras.Model:
+        """Create MTLFormer model.
+        If task is one of single-task names, wrap the multi-output model to expose only the relevant head.
+        If task == 'multitask', return the full multi-output model.
+        """
+        max_case_length = kwargs.get("max_case_length", 50)
+        vocab_size = kwargs.get("vocab_size", 1000)
+        embed_dim = kwargs.get("embed_dim", 36)
+        num_heads = kwargs.get("num_heads", 4)
+        ff_dim = kwargs.get("ff_dim", 64)
+        # Determine output_dim for next_activity
+        output_dim = kwargs.get("output_dim", vocab_size)
+        base_model = get_mtlformer_model(
+            max_case_length=max_case_length,
+            vocab_size=vocab_size,
+            output_dim=output_dim,
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            ff_dim=ff_dim,
+        )
+        if task in ("next_activity", "next_time", "remaining_time"):
+            # Build minimal single-task graphs to avoid unused-head variables.
+            # Shared config
+            embed_dim_local = embed_dim
+            num_heads_local = num_heads
+            ff_dim_local = ff_dim
+
+            if task == "next_activity":
+                # Inputs: tokens only (tasks expect single input)
+                tokens = keras.Input(shape=(max_case_length,), name="tokens")
+                # Internally duplicate tokens and use zeros time (as before)
+                tokens2 = tokens
+                zeros_time = keras.layers.Lambda(
+                    lambda t: tf.zeros((tf.shape(t)[0], 3), dtype=tf.float32),
+                    name="zeros_time_from_tokens"
+                )(tokens)
+
+                # Branch 1 (inputs1)
+                x = TokenAndPositionEmbedding(max_case_length, vocab_size, embed_dim_local)(tokens)
+                x = TransformerBlock(embed_dim_local, num_heads_local, ff_dim_local)(x)
+                x = keras.layers.GlobalAveragePooling1D()(x)
+                # Branch 2 (inputs2)
+                x1 = TokenAndPositionEmbedding(max_case_length, vocab_size, embed_dim_local)(tokens2)
+                x1 = TransformerBlock(embed_dim_local, num_heads_local, ff_dim_local)(x1)
+                x1 = keras.layers.GlobalAveragePooling1D()(x1)
+                # Time features branch (shared feature layers only)
+                x_t1 = keras.layers.Dense(32, activation="relu")(zeros_time)
+                x_2 = keras.layers.Concatenate()([x1, x_t1])
+                x_2 = keras.layers.Dropout(0.1)(x_2)
+                x_2 = keras.layers.Dense(64, activation="relu", name="next_time", kernel_regularizer='l2')(x_2)
+                x_t2 = keras.layers.Dense(32, activation="relu")(zeros_time)
+                x_3 = keras.layers.Concatenate()([x1, x_t2])
+                x_3 = keras.layers.Dropout(0.1)(x_3)
+                x_3 = keras.layers.Dense(64, activation="relu", name="remain_time", kernel_regularizer='l2')(x_3)
+                # Next activity features
+                x_1 = keras.layers.Dropout(0.1)(x)
+                x_1 = keras.layers.Dense(32, activation="relu", name="next_act", kernel_regularizer='l2')(x_1)
+                # Shared concat
+                shared = keras.layers.Concatenate()([x_1, x_2, x_3])
+                # Head out1 only
+                out1 = keras.layers.Dropout(0.1)(shared)
+                out1 = keras.layers.Dense(128, activation="relu")(out1)
+                out1 = keras.layers.Dropout(0.1)(out1)
+                out1 = keras.layers.Dense(32, activation="relu")(out1)
+                out1 = keras.layers.Dropout(0.1)(out1)
+                outputs = keras.layers.Dense(output_dim, activation="linear", name='out1')(out1)
+                return keras.Model(inputs=tokens, outputs=outputs, name="mtlformer_next_activity")
+
+            # For time tasks: inputs are [tokens, time]
+            tokens = keras.Input(shape=(max_case_length,), name="tokens")
+            time_in = keras.Input(shape=(3,), name="time_inputs")
+            tokens2 = tokens
+
+            # Branch 1
+            x = TokenAndPositionEmbedding(max_case_length, vocab_size, embed_dim_local)(tokens)
+            x = TransformerBlock(embed_dim_local, num_heads_local, ff_dim_local)(x)
+            x = keras.layers.GlobalAveragePooling1D()(x)
+            # Branch 2
+            x1 = TokenAndPositionEmbedding(max_case_length, vocab_size, embed_dim_local)(tokens2)
+            x1 = TransformerBlock(embed_dim_local, num_heads_local, ff_dim_local)(x1)
+            x1 = keras.layers.GlobalAveragePooling1D()(x1)
+            # Time feature branches
+            x_t1 = keras.layers.Dense(32, activation="relu")(time_in)
+            x_2 = keras.layers.Concatenate()([x1, x_t1])
+            x_2 = keras.layers.Dropout(0.1)(x_2)
+            x_2 = keras.layers.Dense(64, activation="relu", name="next_time", kernel_regularizer='l2')(x_2)
+            x_t2 = keras.layers.Dense(32, activation="relu")(time_in)
+            x_3 = keras.layers.Concatenate()([x1, x_t2])
+            x_3 = keras.layers.Dropout(0.1)(x_3)
+            x_3 = keras.layers.Dense(64, activation="relu", name="remain_time", kernel_regularizer='l2')(x_3)
+            # Next activity features
+            x_1 = keras.layers.Dropout(0.1)(x)
+            x_1 = keras.layers.Dense(32, activation="relu", name="next_act", kernel_regularizer='l2')(x_1)
+            shared = keras.layers.Concatenate()([x_1, x_2, x_3])
+
+            if task == "next_time":
+                head = keras.layers.Dropout(0.1)(shared)
+                head = keras.layers.Dense(128, activation="relu")(head)
+                head = keras.layers.Dropout(0.1)(head)
+                head = keras.layers.Dense(32, activation="relu")(head)
+                head = keras.layers.Dropout(0.1)(head)
+                outputs = keras.layers.Dense(1, activation="linear", name="out2")(head)
+                return keras.Model(inputs=[tokens, time_in], outputs=outputs, name="mtlformer_next_time")
+            else:  # remaining_time
+                head = keras.layers.Dropout(0.1)(shared)
+                head = keras.layers.Dense(128, activation="relu")(head)
+                head = keras.layers.Dropout(0.1)(head)
+                head = keras.layers.Dense(32, activation="relu")(head)
+                head = keras.layers.Dropout(0.1)(head)
+                outputs = keras.layers.Dense(1, activation="linear", name="out3")(head)
+                return keras.Model(inputs=[tokens, time_in], outputs=outputs, name="mtlformer_remaining_time")
+
+        elif task == "multitask":
+            return base_model
+        else:
+            raise NotImplementedError(f"Task '{task}' not implemented for MTLFormer")
+    
     def get_available_models(self) -> Dict[str, Dict[str, Any]]:
         """Get information about available models."""
         return {
@@ -210,6 +334,8 @@ class ModelRegistry:
         """Get list of supported tasks for a model."""
         if model_name == "process_transformer":
             return ["next_activity", "next_time", "remaining_time"]
+        elif model_name == "mtlformer":
+            return ["next_activity", "next_time", "remaining_time", "multitask"]
         elif model_name == "bert_process":
             return ["next_activity", "next_time", "remaining_time"]
         else:

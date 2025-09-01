@@ -1,8 +1,8 @@
 # Global defaults you can override from CLI, e.g.:
-# python -m src.cli task=next_activity model.hidden_size=512
+# python -m src.cli task=next_activity model.hidden_size=512 train.accelerator=mps
 seed: 42
 
-task: next_activity            # next_activity | suffix | next_time | remaining_time
+task: next_activity            # next_activity | suffix | next_time | remaining_time | multitask
 cv:
   n_folds: 5
   stratify: null
@@ -12,12 +12,12 @@ data:
   path_raw: data/raw
   path_processed: data/processed
   end_of_case_token: "<eoc>"
-  max_prefix_length: null
+  max_prefix_length: 50
   attribute_mode: minimal      # minimal | extended
   datasets: ["BPI_Challenge_2012", "BPI_Challenge_2019", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"]   # Referenzdatensätze + Tourismus
 
 model:
-  name: process_transformer  # process_transformer (and future transformer models)
+  name: process_transformer
   max_case_length: 50
   embed_dim: 36
   num_heads: 4
@@ -25,17 +25,25 @@ model:
 
 train:
   batch_size: 128
-  max_epochs: 10
-  learning_rate: 3e-4
+  max_epochs: 3
+  learning_rate: 1e-4
   accelerator: auto            # auto | cpu | gpu | mps
   devices: 1
+  early_stopping_patience: 1
+  early_stopping_monitor: val_loss
+  early_stopping_mode: min
+  early_stopping_min_delta: 0.005
 
 metrics:
   next_activity: ["accuracy", "f1_score"]
   suffix: ["normalized_damerau_levenshtein"]
   time: ["mae", "rmse", "r2"]
 
-# Preprocessing management (optional)
+# Preprocessing management
 preprocess_action: null        # info | clear | force
 dataset_name: null             # For clearing specific dataset
 force_preprocess: false        # Force reprocessing even if processed data exists
+
+# Analysis management
+analysis:
+  action: null                 # run_stats | null

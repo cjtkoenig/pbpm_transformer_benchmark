@@ -55,14 +55,14 @@ class CanonicalLogsDataLoader:
         Load train and validation data for a specific task and fold.
         
         Args:
-            task: Task name (next_activity, next_time, remaining_time)
+            task: Task name (next_activity, suffix, next_time, remaining_time)
             fold_idx: Fold index (0-4)
             
         Returns:
             Tuple of (train_df, val_df)
         """
-        if task not in ["next_activity", "next_time", "remaining_time"]:
-            raise ValueError("Invalid task. Must be one of: next_activity, next_time, remaining_time")
+        if task not in ["next_activity", "suffix", "next_time", "remaining_time"]:
+            raise ValueError("Invalid task. Must be one of: next_activity, suffix, next_time, remaining_time")
         
         if not 0 <= fold_idx <= 4:
             raise ValueError("Invalid fold index. Must be between 0 and 4")
@@ -90,7 +90,10 @@ class CanonicalLogsDataLoader:
             return json.load(f)
     
     def get_max_case_length(self, df: pd.DataFrame) -> int:
-        """Get maximum case length from data."""
+        """Compute the maximum number of activities per prefix in a DataFrame.
+        Expects a column 'prefix' where each entry is a space-separated string
+        of activity tokens.
+        """
         max_length = 0
         for prefix in df["prefix"].values:
             length = len(prefix.split())
@@ -211,30 +214,18 @@ class CanonicalLogsDataLoader:
         return token_x, time_x, y, time_scaler, y_scaler
     
     def is_processed(self) -> bool:
-        """Check if dataset is already processed with canonical splits."""
+        """Dataset-level check: metadata and global case assignments exist.
+        Task-specific fold files are validated when loading per task.
+        """
         if not self._processed_dir.exists():
             return False
-        
         if not self._splits_dir.exists():
             return False
-        
-        # Check if all required files exist
         required_files = [
             self._processed_dir / "metadata.json",
-            self._splits_dir / "splits_metadata.json",
             self._splits_dir / "case_assignments.json"
         ]
-        
-        if not all(f.exists() for f in required_files):
-            return False
-        
-        # Check if all folds exist
-        for fold_idx in range(5):
-            fold_dir = self._splits_dir / f"fold_{fold_idx}"
-            if not (fold_dir / "train.csv").exists() or not (fold_dir / "val.csv").exists():
-                return False
-        
-        return True
+        return all(f.exists() for f in required_files)
 
 
 # Legacy loader for backward compatibility (deprecated)

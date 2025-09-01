@@ -8,7 +8,6 @@ import json
 import pandas as pd
 import numpy as np
 import datetime
-from multiprocessing import Pool
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List
 
@@ -55,31 +54,48 @@ class CanonicalLogsProcessor:
                                "time:timestamp": "Complete Timestamp"})
         
         # Apply the same preprocessing as original ProcessTransformer
-        df["Activity"] = df["Activity"].str.lower()
-        df["Activity"] = df["Activity"].str.replace(" ", "-")
+        df["Activity"] = df["Activity"].astype(str).str.lower()
+        df["Activity"] = df["Activity"].str.replace(" ", "-", regex=False)
         
-        # Handle timestamp
-        if df["Complete Timestamp"].dtype == 'object':
-            df["Complete Timestamp"] = df["Complete Timestamp"].str.replace("/", "-")
-            df["Complete Timestamp"] = pd.to_datetime(df["Complete Timestamp"], 
-                                                     dayfirst=True).map(lambda x: x.strftime("%Y-%m-%d %H:%M:%S"))
+        # Handle timestamp robustly: coerce to string if needed before string ops
+        ts = df["Complete Timestamp"]
+        if ts.dtype == 'object':
+            # Typical string timestamps with slashes
+            df["Complete Timestamp"] = ts.astype(str).str.replace("/", "-", regex=False)
+            df["Complete Timestamp"] = pd.to_datetime(df["Complete Timestamp"], dayfirst=True, errors='coerce')
         else:
-            df["Complete Timestamp"] = df["Complete Timestamp"].map(lambda x: x.strftime("%Y-%m-%d %H:%M:%S"))
+            # Could be datetime64, int, float, or mixed; convert safely
+            try:
+                df["Complete Timestamp"] = pd.to_datetime(ts, errors='coerce')
+            except Exception:
+                # Fallback: cast to string then parse with dayfirst heuristic
+                df["Complete Timestamp"] = pd.to_datetime(ts.astype(str), dayfirst=True, errors='coerce')
+        # Drop rows with unparseable timestamps
+        before = len(df)
+        df = df.dropna(subset=["Complete Timestamp"]).reset_index(drop=True)
+        if len(df) < before:
+            print(f"Warning: dropped {before - len(df)} rows with invalid timestamps in '{self._name}'")
         
         if sort_temporally:
             df.sort_values(by=["Complete Timestamp"], inplace=True)
         
         return df
     
-    def _extract_vocabularies(self, df: pd.DataFrame) -> Dict[str, Dict[str, int]]:
-        """Extract vocabularies for activities and create metadata."""
+    def _extract_vocabularies(self, df: pd.DataFrame, eoc_token: str) -> Dict[str, Dict[str, int]]:
+        """Extract vocabularies for activities and create metadata.
+        Adds End-of-Case token to both input and output vocabularies.
+        """
         keys = ["[PAD]", "[UNK]"]
         activities = list(df["Activity"].unique())
+        # Ensure EOC is present in vocabularies
+        if eoc_token not in activities:
+            activities.append(eoc_token)
         keys.extend(activities)
         val = range(len(keys))
 
         x_word_dict = dict(zip(keys, val))
-        y_word_dict = dict(zip(activities, range(len(activities))))
+        # y vocab does not need PAD/UNK, but must include EOC for next-activity and suffix labels
+        y_word_dict = {act: idx for idx, act in enumerate(sorted(activities))}
 
         # Save metadata
         metadata = {
@@ -87,7 +103,8 @@ class CanonicalLogsProcessor:
             "y_word_dict": y_word_dict,
             "vocab_size": len(x_word_dict),
             "num_activities": len(activities),
-            "activities": activities
+            "activities": activities,
+            "eoc_token": eoc_token
         }
         
         with open(self._processed_dir / "metadata.json", "w") as f:
@@ -95,113 +112,112 @@ class CanonicalLogsProcessor:
         
         return {"x_word_dict": x_word_dict, "y_word_dict": y_word_dict}
     
-    def _process_next_activity(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process data for next activity prediction task."""
-        processed_df = pd.DataFrame(columns=["case_id", "prefix", "k", "next_act"])
-        idx = 0
-        
-        for case in df["Case ID"].unique():
-            case_activities = df[df["Case ID"] == case]["Activity"].tolist()
-            
+    def _process_next_activity(self, df: pd.DataFrame, eoc_token: str) -> pd.DataFrame:
+        """Process data for next activity prediction task.
+        Includes a final training example per case with next_act set to EOC.
+        Refactored to iterate over groups instead of repeatedly filtering the DataFrame.
+        """
+        rows = []
+        for case, group in df.groupby("Case ID", sort=False):
+            case_activities = group["Activity"].tolist()
+            # Standard next steps
             for i in range(len(case_activities) - 1):
-                if i == 0:
-                    prefix = case_activities[0]
-                else:
-                    prefix = " ".join(case_activities[:i+1])
-                
-                next_act = case_activities[i+1]
-                
-                processed_df.at[idx, "case_id"] = case
-                processed_df.at[idx, "prefix"] = prefix
-                processed_df.at[idx, "k"] = i
-                processed_df.at[idx, "next_act"] = next_act
-                idx += 1
-        
+                prefix = " ".join(case_activities[: i + 1])
+                next_act = case_activities[i + 1]
+                rows.append({
+                    "case_id": case,
+                    "prefix": prefix,
+                    "k": i,
+                    "next_act": next_act,
+                })
+            # Add final step predicting EOC
+            if case_activities:
+                prefix = " ".join(case_activities)
+                rows.append({
+                    "case_id": case,
+                    "prefix": prefix,
+                    "k": len(case_activities) - 1,
+                    "next_act": eoc_token,
+                })
+        processed_df = pd.DataFrame(rows, columns=["case_id", "prefix", "k", "next_act"]).reset_index(drop=True)
         return processed_df
     
     def _process_next_time(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process data for next time prediction task."""
-        processed_df = pd.DataFrame(columns=["case_id", "prefix", "k", "next_time", 
-                                           "recent_time", "latest_time", "time_passed"])
-        idx = 0
-        
-        for case in df["Case ID"].unique():
-            case_data = df[df["Case ID"] == case].sort_values("Complete Timestamp")
+        rows = []
+        for case, group in df.groupby("Case ID", sort=False):
+            case_data = group.sort_values("Complete Timestamp")
             case_activities = case_data["Activity"].tolist()
             timestamps = pd.to_datetime(case_data["Complete Timestamp"]).tolist()
-            
             for i in range(len(case_activities) - 1):
-                if i == 0:
-                    prefix = case_activities[0]
-                else:
-                    prefix = " ".join(case_activities[:i+1])
-                
-                # Calculate time features
+                prefix = " ".join(case_activities[: i + 1])
                 current_time = timestamps[i]
-                next_time = timestamps[i+1]
-                time_diff = (next_time - current_time).total_seconds() / 3600  # hours
-                
-                # Recent and latest times (simplified for now)
-                recent_time = 0  # Placeholder
-                latest_time = 0  # Placeholder
-                time_passed = 0  # Placeholder
-                
-                processed_df.at[idx, "case_id"] = case
-                processed_df.at[idx, "prefix"] = prefix
-                processed_df.at[idx, "k"] = i
-                processed_df.at[idx, "next_time"] = time_diff
-                processed_df.at[idx, "recent_time"] = recent_time
-                processed_df.at[idx, "latest_time"] = latest_time
-                processed_df.at[idx, "time_passed"] = time_passed
-                idx += 1
-        
-        return processed_df
+                next_time = timestamps[i + 1]
+                time_diff = (next_time - current_time).total_seconds() / 3600.0  # hours
+                rows.append({
+                    "case_id": case,
+                    "prefix": prefix,
+                    "k": i,
+                    "next_time": float(time_diff),
+                    "recent_time": 0.0,
+                    "latest_time": 0.0,
+                    "time_passed": 0.0,
+                })
+        return pd.DataFrame(rows, columns=["case_id", "prefix", "k", "next_time", "recent_time", "latest_time", "time_passed"]).reset_index(drop=True)
     
     def _process_remaining_time(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process data for remaining time prediction task."""
-        processed_df = pd.DataFrame(columns=["case_id", "prefix", "k", "remaining_time_days",
-                                           "recent_time", "latest_time", "time_passed"])
-        idx = 0
-        
-        for case in df["Case ID"].unique():
-            case_data = df[df["Case ID"] == case].sort_values("Complete Timestamp")
+        rows = []
+        for case, group in df.groupby("Case ID", sort=False):
+            case_data = group.sort_values("Complete Timestamp")
             case_activities = case_data["Activity"].tolist()
             timestamps = pd.to_datetime(case_data["Complete Timestamp"]).tolist()
-            
+            if not timestamps:
+                continue
             case_end_time = timestamps[-1]
-            
-            for i in range(len(case_activities) - 1):
-                if i == 0:
-                    prefix = case_activities[0]
-                else:
-                    prefix = " ".join(case_activities[:i+1])
-                
-                # Calculate remaining time
+            for i in range(len(case_activities)):
+                prefix = " ".join(case_activities[: i + 1])
                 current_time = timestamps[i]
                 remaining_time = (case_end_time - current_time).total_seconds() / (24 * 3600)  # days
-                
-                # Recent and latest times (simplified for now)
-                recent_time = 0  # Placeholder
-                latest_time = 0  # Placeholder
-                time_passed = 0  # Placeholder
-                
-                processed_df.at[idx, "case_id"] = case
-                processed_df.at[idx, "prefix"] = prefix
-                processed_df.at[idx, "k"] = i
-                processed_df.at[idx, "remaining_time_days"] = remaining_time
-                processed_df.at[idx, "recent_time"] = recent_time
-                processed_df.at[idx, "latest_time"] = latest_time
-                processed_df.at[idx, "time_passed"] = time_passed
-                idx += 1
-        
-        return processed_df
+                rows.append({
+                    "case_id": case,
+                    "prefix": prefix,
+                    "k": i,
+                    "remaining_time_days": float(remaining_time),
+                    "recent_time": 0.0,
+                    "latest_time": 0.0,
+                    "time_passed": 0.0,
+                })
+        return pd.DataFrame(rows, columns=["case_id", "prefix", "k", "remaining_time_days", "recent_time", "latest_time", "time_passed"]).reset_index(drop=True)
     
-    def process_dataset(self, random_state: int = 42) -> Dict[str, Any]:
+    def _process_suffix(self, df: pd.DataFrame, eoc_token: str) -> pd.DataFrame:
+        """Process data for suffix prediction task.
+        Produces rows with [case_id, prefix, k, suffix_sequence] where suffix_sequence
+        is the space-separated remaining activities after the prefix, terminated by EOC.
+        """
+        rows = []
+        for case, group in df.groupby("Case ID", sort=False):
+            case_activities = group["Activity"].tolist()
+            n = len(case_activities)
+            for i in range(n):
+                prefix = " ".join(case_activities[: i + 1])
+                remaining = case_activities[i + 1 :]
+                suffix_seq = " ".join(remaining + [eoc_token])
+                rows.append({
+                    "case_id": case,
+                    "prefix": prefix,
+                    "k": i,
+                    "suffix_sequence": suffix_seq,
+                })
+        return pd.DataFrame(rows, columns=["case_id", "prefix", "k", "suffix_sequence"]).reset_index(drop=True)
+    
+    def process_dataset(self, random_state: int = 42, eoc_token: str = "<eoc>") -> Dict[str, Any]:
         """
         Process the dataset and create canonical 5-fold case-based splits.
         
         Args:
             random_state: Random seed for reproducible splits
+            eoc_token: End-of-case token to append and use as final label
             
         Returns:
             Dictionary with processing information
@@ -212,16 +228,16 @@ class CanonicalLogsProcessor:
         df = self._load_and_standardize_df(sort_temporally=False)
         print(f"Loaded {len(df)} events from {df['Case ID'].nunique()} cases")
         
-        # Extract vocabularies
-        vocabularies = self._extract_vocabularies(df)
+        # Extract vocabularies (with EOC)
+        vocabularies = self._extract_vocabularies(df, eoc_token=eoc_token)
         print(f"Vocabulary size: {len(vocabularies['x_word_dict'])}")
         print(f"Number of activities: {len(vocabularies['y_word_dict'])}")
         
         # Process for all tasks
         tasks_data = {}
         
-        # Next Activity
-        next_activity_df = self._process_next_activity(df)
+        # Next Activity (with EOC as terminal label)
+        next_activity_df = self._process_next_activity(df, eoc_token=eoc_token)
         tasks_data['next_activity'] = next_activity_df
         print(f"Next activity: {len(next_activity_df)} samples")
         
@@ -230,10 +246,15 @@ class CanonicalLogsProcessor:
         tasks_data['next_time'] = next_time_df
         print(f"Next time: {len(next_time_df)} samples")
         
-        # Remaining Time
+        # Remaining Time (prefix includes entire case at last step)
         remaining_time_df = self._process_remaining_time(df)
         tasks_data['remaining_time'] = remaining_time_df
         print(f"Remaining time: {len(remaining_time_df)} samples")
+        
+        # Suffix Prediction (full remaining sequence including EOC)
+        suffix_df = self._process_suffix(df, eoc_token=eoc_token)
+        tasks_data['suffix'] = suffix_df
+        print(f"Suffix: {len(suffix_df)} samples")
         
         # Create canonical splits for each task
         cv = CanonicalCrossValidation(n_folds=5, random_state=random_state)
@@ -271,28 +292,22 @@ class SimplePreprocessor:
         self.config = config
     
     def is_processed(self, dataset_name: str) -> bool:
-        """Check if dataset is already processed with canonical splits."""
+        """Check if dataset is already processed (dataset-level check).
+        Verifies presence of metadata and global case assignments. Task-specific
+        fold files are validated at load time per task.
+        """
         processed_path = self.processed_dir / dataset_name / "processed"
         if not processed_path.exists():
             return False
-            
-        # Check for canonical splits
-        splits_dir = processed_path / "splits"
-        if not splits_dir.exists():
+        
+        base_splits_dir = self.processed_dir / dataset_name / "splits"
+        if not base_splits_dir.exists():
             return False
         
-        # Check if all required files exist
         required_files = [
             processed_path / "metadata.json",
-            splits_dir / "splits_metadata.json",
-            splits_dir / "case_assignments.json"
+            base_splits_dir / "case_assignments.json"
         ]
-        
-        # Check if all folds exist
-        for fold_idx in range(5):
-            fold_dir = splits_dir / f"fold_{fold_idx}"
-            if not (fold_dir / "train.csv").exists() or not (fold_dir / "val.csv").exists():
-                return False
         
         return all(f.exists() for f in required_files)
     
@@ -314,15 +329,12 @@ class SimplePreprocessor:
         
         # Find raw file
         csv_candidate = self.raw_dir / f"{dataset_name}.csv"
-        xes_candidate = self.raw_dir / f"{dataset_name}.xes"
         
         if csv_candidate.exists():
             raw_file_path = csv_candidate
-        elif xes_candidate.exists():
-            raw_file_path = xes_candidate
         else:
             raise FileNotFoundError(
-                f"Neither {csv_candidate.name} nor {xes_candidate.name} exist in {self.raw_dir}"
+                f"{csv_candidate.name} not found in {self.raw_dir} (CSV-only is supported)."
             )
         
         # Use canonical processor
@@ -343,7 +355,8 @@ class SimplePreprocessor:
         )
         
         # Process dataset with canonical splits
-        processing_info = processor.process_dataset(random_state=self.config.get('seed', 42))
+        eoc_token = self.config.get('data', {}).get('end_of_case_token', '<eoc>')
+        processing_info = processor.process_dataset(random_state=self.config.get('seed', 42), eoc_token=eoc_token)
         
         return processing_info
     

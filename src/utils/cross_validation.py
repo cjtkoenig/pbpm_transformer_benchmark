@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 from sklearn.model_selection import KFold
 import hashlib
+import pickle
+from sklearn.preprocessing import StandardScaler
 
 
 class CanonicalCrossValidation:
@@ -102,6 +104,24 @@ class CanonicalCrossValidation:
             
             train_df.to_csv(fold_dir / "train.csv", index=False)
             val_df.to_csv(fold_dir / "val.csv", index=False)
+
+            # Persist scalers for time-based tasks (fit on train only)
+            if task_name in ("next_time", "remaining_time"):
+                try:
+                    # Feature scaler
+                    time_scaler = StandardScaler()
+                    train_time_x = train_df[["recent_time", "latest_time", "time_passed"]].values.astype(float)
+                    time_scaler.fit(train_time_x)
+                    with open(fold_dir / f"time_scaler_{task_name}.pkl", "wb") as f:
+                        pickle.dump(time_scaler, f)
+                    # Target scaler
+                    y_col = "next_time" if task_name == "next_time" else "remaining_time_days"
+                    y_scaler = StandardScaler()
+                    y_scaler.fit(train_df[[y_col]].values.astype(float))
+                    with open(fold_dir / f"y_scaler_{task_name}.pkl", "wb") as f:
+                        pickle.dump(y_scaler, f)
+                except Exception as e:
+                    print(f"Warning: failed to persist scalers for {task_name} fold {fold_idx}: {e}")
             
             # Store fold information
             splits_info['folds'][f'fold_{fold_idx}'] = {

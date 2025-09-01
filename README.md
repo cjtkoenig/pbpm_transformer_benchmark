@@ -4,6 +4,10 @@ A comprehensive benchmark for Predictive Business Process Monitoring (PBPM) usin
 
 ## Benchmark-Setup
 
+> Methodology Alignment (Kurzfassung)
+>
+> Dieses Projekt bildet die in der Masterarbeit beschriebene Benchmark-Setup-Methodik nach Rama-Maneiro, Vidal & Lama (2021) ab. Es implementiert die vier kanonischen Aufgaben, ein standardisiertes Preprocessing mit <eoc>-Token, strikt case-basierte 5-fold Cross-Validation mit persistierten Splits, aufgabenspezifische Metriken sowie eine Analyse-Pipeline zur Modell-Rangordnung. Aktuell ist ein Modell implementiert (ProcessTransformer); weitere PyTorch- und TensorFlow-Modelle folgen. Adapter sorgen dafür, dass alle Modelle exakt dieselben kanonischen Artefakte nutzen (nur Formwandel, keine Inhaltsänderungen). Die Umgebung (Accelerator, Versionen) wird pro Lauf in outputs/env.json protokolliert, um Reproduzierbarkeit und Hardware-Transparenz sicherzustellen.
+
 Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vidal & Lama (2021) und stellt eine vergleichbare sowie reproduzierbare Evaluationsgrundlage im Predictive Business Process Monitoring (PBPM) sicher.
 
 ### Benchmark-Aufgaben
@@ -27,9 +31,9 @@ Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vida
 
 ### Evaluation
 - **5-fold Cross-Validation** mit Case-basierten Splits (verhindert Data Leakage)  
-- Innerhalb der Folds: 80/20-Split in Trainings- und Validierungsdaten  
+- Implizit ca. **80/20** Train/Val je Fold (1/5 Val-Fold); keine zusätzlichen Random-Splits innerhalb eines Folds  
 - Einheitliche Hardware: MacBook Pro (Apple M3 Pro, 36 GB RAM)  
-- Software: Python 3.13.5, PyTorch 2.8.0 (MPS) oder TensorFlow, wenn vom Model benötigt.
+- Software: Python 3.11; PyTorch 2.8.0 (MPS). TensorFlow: bevorzugt ≥2.20.0 (siehe pyproject), 2.15.1 ist in einigen Python-3.11-Umgebungen nicht verfügbar.
 
 ### Metriken
 - Next Activity → **Accuracy**  
@@ -41,6 +45,13 @@ Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vida
 - Rangordnung der Modelle mittels **Plackett-Luce-Modell**  
 - Paarweise Vergleiche der Top-Modelle mit **hierarchischem Bayes-Test**  
 - Robustheitsprüfung durch **Friedman- / Wilcoxon-Tests**  
+
+Hinweis: Eine minimale Analyseschicht ist unter `src/analysis/stat_tests.py` vorhanden und sammelt per-Fold-Metriken aus `outputs/` und erzeugt eine erste Rangordnung. Sie kann über Hydra aufgerufen werden:
+
+```bash
+uv run python -m src.cli analysis.action=run_stats
+# Ergebnis: outputs/analysis/summary.json
+```
 
 ### Modellauswahl
 - Berücksichtigt werden nur Modelle mit verfügbarer/zugänglicher Implementierung  
@@ -113,7 +124,7 @@ Dieses Vorgehen stellt sicher, dass die Ergebnisse der Modelle **vergleichbar un
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.10 or 3.11
 - uv package manager
 
 ### Installation
@@ -217,7 +228,7 @@ pbpm_transformer_benchmark/
 ├── configs/                 # Configuration files
 │   └── benchmark.yaml      # Main configuration
 ├── data/                   # Data directories
-│   ├── raw/               # Raw event logs (.csv, .xes)
+│   ├── raw/               # Raw event logs (.csv only)
 │   └── processed/         # Preprocessed data (auto-generated)
 ├── src/                   # Source code
 │   ├── cli.py            # Command-line interface
@@ -235,19 +246,32 @@ pbpm_transformer_benchmark/
 ## Make Targets
 
 ```bash
-# Install dependencies
+# Create venv and install deps
 make install
 
-# Run tests
-make test
+# Run benchmark with defaults (CPU)
+make run
 
-# Clean outputs
-make clean
+# Run for a specific dataset
+make run_dataset DATASET=Helpdesk
 
-# Format code
-make format
+# Run with custom epochs/batch size
+make run_custom EPOCHS=10 BATCH_SIZE=64
 
-# Lint code
+# Dataset statistics (one or all)
+make stats DATASET=Helpdesk
+make stats_all
+
+# System info snapshot
+make sysinfo
+
+# Cleanup
+make clean           # caches only
+make clean_outputs   # outputs/ and lightning_logs/
+make clean_processed # data/processed cache
+make clean_all       # everything above
+
+# Linting
 make lint
 ```
 
