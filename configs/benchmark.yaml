@@ -2,7 +2,7 @@
 # python -m src.cli task=next_activity model.hidden_size=512 train.accelerator=mps
 seed: 42
 
-task: next_activity            # next_activity | suffix | next_time | remaining_time | multitask
+task: next_activity            # next_activity | next_time | remaining_time | multitask
 cv:
   n_folds: 5
   stratify: null
@@ -17,7 +17,7 @@ data:
   datasets: ["BPI_Challenge_2012", "BPI_Challenge_2019", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"]   # Referenzdatensätze + Tourismus
 
 model:
-  name: process_transformer
+  name: process_transformer   # process_transformer | mtlformer
   max_case_length: 50
   embed_dim: 36
   num_heads: 4
@@ -36,7 +36,6 @@ train:
 
 metrics:
   next_activity: ["accuracy", "f1_score"]
-  suffix: ["normalized_damerau_levenshtein"]
   time: ["mae", "rmse", "r2"]
 
 # Preprocessing management

@@ -1,193 +1,130 @@
 # PBPM Transformer Benchmark
 
-A comprehensive benchmark for Predictive Business Process Monitoring (PBPM) using Transformer models, following the methodology of Rama-Maneiro et al. (2021).
+A standardized benchmark for Predictive Business Process Monitoring (PBPM) with Transformer-based models. It follows the methodology of Rama‑Maneiro, Vidal & Lama (2021) with canonical preprocessing, strict case-based 5‑fold cross‑validation, and task‑specific metrics.
 
-## Benchmark-Setup
+Table of Contents
+- Overview
+- Quick Start
+- Installation and Environment
+- Datasets and Preprocessing
+- Running Tasks
+- Configuration (Hydra)
+- Cross-Validation Protocol
+- Models and Adapters
+- Metrics
+- Analysis and Reporting
+- Make Targets
+- Troubleshooting and Known Pitfalls
+- Project Layout
+- License
 
-> Methodology Alignment (Kurzfassung)
->
-> Dieses Projekt bildet die in der Masterarbeit beschriebene Benchmark-Setup-Methodik nach Rama-Maneiro, Vidal & Lama (2021) ab. Es implementiert die vier kanonischen Aufgaben, ein standardisiertes Preprocessing mit <eoc>-Token, strikt case-basierte 5-fold Cross-Validation mit persistierten Splits, aufgabenspezifische Metriken sowie eine Analyse-Pipeline zur Modell-Rangordnung. Aktuell ist ein Modell implementiert (ProcessTransformer); weitere PyTorch- und TensorFlow-Modelle folgen. Adapter sorgen dafür, dass alle Modelle exakt dieselben kanonischen Artefakte nutzen (nur Formwandel, keine Inhaltsänderungen). Die Umgebung (Accelerator, Versionen) wird pro Lauf in outputs/env.json protokolliert, um Reproduzierbarkeit und Hardware-Transparenz sicherzustellen.
-
-Die Methodik des Benchmarks orientiert sich am Rahmenwerk von Rama-Maneiro, Vidal & Lama (2021) und stellt eine vergleichbare sowie reproduzierbare Evaluationsgrundlage im Predictive Business Process Monitoring (PBPM) sicher.
-
-### Benchmark-Aufgaben
-- **Next Activity Prediction** – Vorhersage der nächsten Aktivität  
-- **Suffix Prediction** – Vorhersage des verbleibenden Aktivitätsverlaufs  
-- **Next Time Prediction** – Vorhersage der Zeit bis zum nächsten Event  
-- **Remaining Time Prediction** – Schätzung der Restlaufzeit eines Prozesses  
-
-### Datensätze
-- Nutzung der von Rama-Maneiro et al. eingesetzten Logs (verschiedene Domänen & Komplexität)  
-- Ergänzend: eigener Datensatz aus der Tourismusbranche zur Überprüfung der Generalisierbarkeit  
-
-### Preprocessinge 
-- Generierung von Präfixen unterschiedlicher Länge  
-- Kodierung der Aktivitäten  
-- Normalisierung numerischer Attribute  
-- Hinzufügen eines *End-of-Case*-Tokens  
-- Zwei Varianten:  
-  - **Minimalistisch**: nur Aktivitäten  
-  - **Erweitert**: zusätzliche Attribute (falls Modellarchitektur unterstützt)  
-
-### Evaluation
-- **5-fold Cross-Validation** mit Case-basierten Splits (verhindert Data Leakage)  
-- Implizit ca. **80/20** Train/Val je Fold (1/5 Val-Fold); keine zusätzlichen Random-Splits innerhalb eines Folds  
-- Einheitliche Hardware: MacBook Pro (Apple M3 Pro, 36 GB RAM)  
-- Software: Python 3.11; PyTorch 2.8.0 (MPS). TensorFlow: bevorzugt ≥2.20.0 (siehe pyproject), 2.15.1 ist in einigen Python-3.11-Umgebungen nicht verfügbar.
-
-### Metriken
-- Next Activity → **Accuracy**  
-- Suffix Prediction → **normalisierte Damerau-Levenshtein-Distanz**  
-- Zeitprognosen → **Mean Absolute Error (MAE)**  
-- Ergänzend: Trainingszeit, Inferenzzeit, Modellgröße  
-
-### Statistische Auswertung
-- Rangordnung der Modelle mittels **Plackett-Luce-Modell**  
-- Paarweise Vergleiche der Top-Modelle mit **hierarchischem Bayes-Test**  
-- Robustheitsprüfung durch **Friedman- / Wilcoxon-Tests**  
-
-Hinweis: Eine minimale Analyseschicht ist unter `src/analysis/stat_tests.py` vorhanden und sammelt per-Fold-Metriken aus `outputs/` und erzeugt eine erste Rangordnung. Sie kann über Hydra aufgerufen werden:
-
-```bash
-uv run python -m src.cli analysis.action=run_stats
-# Ergebnis: outputs/analysis/summary.json
-```
-
-### Modellauswahl
-- Berücksichtigt werden nur Modelle mit verfügbarer/zugänglicher Implementierung  
-- Fokus: **Transformer-Modelle** (seit 2020)  
-- Aktuell nur ProcessTransformer implementiert 
-
-## Model Adapters
-
-Um unterschiedliche Modellarchitekturen in den Benchmark einzubinden, wird ein **einheitliches, kanonisches Datenformat** basierend auf dem originalen ProcessTransformer genutzt.  
-Alle Datensätze werden **einmalig** vorverarbeitet (Präfix-Generierung, Kodierung, Normalisierung, Padding, Splits).  
-Diese Artefakte bestehen u. a. aus:
-
-- `{task}_train.csv` / `{task}_test.csv` – Trainings- und Testdaten für jede Aufgabe  
-- `metadata.json` – Metadaten (Vokabulare, `x_word_dict`, `y_word_dict`, max. Präfixlänge)  
-- Einheitliche **Case-basierte Splits** (5-fold Cross-Validation)  
-
-### Adapter-Konzept
-Da verschiedene Modelle Eingaben in unterschiedlicher Form erwarten, kommen **Adapter** zum Einsatz.  
-Adapter sind *leichte Umwandlungsschichten*, die nur die **Datenform** anpassen, nicht deren Inhalt.
-
-- **Erlaubt**:  
-  - Indizes ↔ One-Hot Konvertierung  
-  - Aufsplitten von `[B,T,D]` in mehrere Eingaben (z. B. Aktivitäten, Ressourcen, Zeitfeature)  
-  - Erzeugen von Attention-Masks aus `pad_id`  
-  - Änderung von Datentypen (`int64` → `int32`)  
-  - Padding/Clipping auf `max_prefix_len`  
-
-- **Nicht erlaubt**:  
-  - Neue Splits erstellen  
-  - Labels verschieben oder neu berechnen  
-  - Re-Kodierung von Aktivitäten/Vokabular  
-  - Abweichende Normalisierung oder Zeit-Einheiten  
-  - Daten augmentieren oder filtern  
-
-### Konformität mit dem Benchmark
-Die Benchmark-Invarianten gelten für **alle Modelle**:
-- Einheitliche **Tasks & Targets** (Next Activity, Next Time, Remaining Time, Suffix)  
-- Gleiche **5-fold Cross-Validation Splits** nach Case-ID  
-- Einheitliche **Preprocessing-Pipeline** (einmalig ausgeführt)  
-- Einheitliche **Metriken** pro Task  
-- Dokumentierte **Hardware-/Software-Umgebung**  
-
-Adapter sind somit nur „Stecker“, die gewährleisten, dass jedes Modell exakt dieselben Daten konsumiert – lediglich in der Form, die es benötigt.
-
-### Implementierte Modelle
-- **ProcessTransformer** (TensorFlow) - Original-Implementation
-- **BERT Process** (PyTorch) - Platzhalter für zukünftige Modelle
-
-### Cross-Validation Implementation
-Die Implementierung folgt strikt der Rama-Maneiro et al. (2021) Methodik:
-
-- **Case-basierte Splits**: Alle Präfixe eines Cases werden entweder im Training oder Validation Set
-- **5 Folds**: Jeder Case erscheint in genau einem Validation-Fold
-- **Keine Data Leakage**: Präfixe desselben Cases können nicht zwischen Train/Val durchsickern
-- **Reproduzierbare Splits**: Feste Seeds für konsistente Ergebnisse
-- **Aggregierte Metriken**: Mean, Std, Min, Max über alle Folds
-
-### Validierung
-- Hashes der kanonischen Artefakte werden veröffentlicht.  
-- Unit Tests prüfen u. a.:  
-  - Round-Trip Konsistenz (`argmax(one_hot(y)) == y_index`)  
-  - Masken entsprechen dem `pad_id`  
-  - Sample-Anzahl pro Split ist identisch über alle Adapter  
-  - Case-basierte Splits ohne Überlappung
-
-Dieses Vorgehen stellt sicher, dass die Ergebnisse der Modelle **vergleichbar und reproduzierbar** bleiben.
-
+## Overview
+- Canonical tasks: next activity, next time, remaining time.
+- Centralized preprocessing: prefixes, activity encoding, numeric normalization, End‑of‑Case token (<eoc>), cached under data/processed.
+- Reproducible 5‑fold cross‑validation with persisted, case-based splits and fixed seeds.
+- Adapters reshape data only; they must not change content, labels, vocabularies, or splits.
+- Minimal environment snapshot is written to outputs/env.json for reproducibility.
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.10 or 3.11
+Prerequisites
+- Python 3.11
 - uv package manager
 
-### Installation
-
+Fast path (recommended)
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd pbpm_transformer_benchmark
+# One-command onboarding: create venv, install minimal deps, run CV sanity test
+make setup
+```
+Notes
+- Minimal install includes pandas 2.3.x, numpy 1.26.x, scikit-learn >=1.4,<1.6, scipy 1.16.x — sufficient for test_cv.py and CV utilities.
+- PyTorch (for PyTorch-based utilities) runs on Apple Silicon with MPS when train.accelerator=mps.
+- TensorFlow: prefer >= 2.20.0 on Python 3.11 (requirements.txt’s 2.15.1 pin may be incompatible in some environments).
 
-# Install dependencies
-uv sync
+Run a quick CV sanity check
+```bash
+make test
+# Or
+uv run python test_cv.py
 ```
 
-### Basic Usage
+## Installation and Environment
 
+Full installation
 ```bash
-# Run next activity prediction
-uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]"
-
-# Run suffix prediction
-uv run python -m src.cli task=suffix data.datasets="[Helpdesk]"
-
-# Run next time prediction
-uv run python -m src.cli task=next_time data.datasets="[Helpdesk]"
-
-# Run remaining time prediction
-uv run python -m src.cli task=remaining_time data.datasets="[Helpdesk]"
-
-# Multi-task learning has been removed from this version
+make install
+# Or using uv directly
+uv venv
+uv pip install -r requirements.txt
 ```
 
-## Data Preprocessing
-
-The system automatically handles data preprocessing with intelligent caching:
-
-### Automatic Preprocessing
-- Datasets are automatically preprocessed on first use
-- Preprocessed data is saved in `data/processed/` for reuse
-- Subsequent runs use cached data for efficiency
-
-### Preprocessing Management
-
+Minimal manual install (no Make)
 ```bash
-# View processed datasets
+uv venv
+uv run python -m ensurepip --upgrade || true
+uv pip install pandas==2.3.1 numpy==1.26.4 "scikit-learn>=1.4,<1.6" scipy==1.16.1
+uv run python test_cv.py
+```
+
+Environment notes
+- Python: 3.11
+- Torch: 2.8.0 (MPS supported on Apple Silicon)
+- TensorFlow: prefer >= 2.20.0 on Python 3.11; avoid 2.15.1 on macOS with Python 3.11.
+
+## Datasets and Preprocessing
+- Place raw CSV logs in data/raw with at least columns case:concept:name, concept:name, and timestamps where required.
+- Preprocessing runs on first use and caches under data/processed/.
+- Two attribute modes: minimal (activities only) and extended (if model supports attributes).
+
+Manage preprocessing
+```bash
+# Inspect processed availability
 uv run python -m src.cli preprocess_action=info
 
-# Force reprocessing of datasets
+# Force rebuild for specific datasets
 uv run python -m src.cli preprocess_action=force data.datasets="[Helpdesk]"
 
-# Force reprocessing during task execution
+# Force during task execution
 uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" force_preprocess=true
 
-# Clear processed data
+# Clear processed cache
 uv run python -m src.cli preprocess_action=clear
 ```
 
-## Configuration
+## Running Tasks
+```bash
+# Next activity
+uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]"
 
-The benchmark is configured via `configs/benchmark.yaml`:
+# Next time
+uv run python -m src.cli task=next_time data.datasets="[Helpdesk]"
 
+# Remaining time
+uv run python -m src.cli task=remaining_time data.datasets="[Helpdesk]"
+```
+
+## Configuration (Hydra)
+Entry point: src/cli.py with configs under configs/. Canonical config is configs/benchmark.yaml. Override via Hydra dot-notation.
+
+Examples
+```bash
+# Override model params
+uv run python -m src.cli task=next_activity model.hidden_size=512 model.num_layers=6
+
+# Override training params
+uv run python -m src.cli task=next_activity train.max_epochs=20 train.batch_size=64
+
+# Override data params
+uv run python -m src.cli task=next_activity data.max_prefix_length=20 data.attribute_mode=extended
+
+# Choose datasets
+uv run python -m src.cli task=next_activity data.datasets="[Helpdesk,Tourism]"
+```
+
+Config reference (excerpt)
 ```yaml
 # Task selection
-task: next_activity  # next_activity | suffix | next_time | remaining_time
+task: next_activity  # next_activity | next_time | remaining_time | (multitask for mtlformer)
 
 # Data configuration
 data:
@@ -200,7 +137,7 @@ data:
 
 # Model configuration
 model:
-  name: process_transformer  # process_transformer
+  name: process_transformer # process_transformer | mtlformer 
   hidden_size: 256
   num_layers: 4
   num_heads: 8
@@ -221,92 +158,91 @@ cv:
   split_by_cases: true
 ```
 
-## Project Layout
+## Cross-Validation Protocol
+- Strict case-based splits; no case appears in both train and validation of a fold.
+- 5 folds persisted per dataset/task with a stable seed.
+- Aggregation utilities compute mean/std/min/max across folds.
 
+## Models and Adapters
+Adapters bridge canonical data and model I/O. They may reshape and cast, but must not change content.
+
+Allowed
+- Reshaping [B,T,D], generating attention masks from pad_id.
+- One-hot ↔ index conversion; dtype changes; padding/clipping to max_prefix_len.
+
+Not allowed
+- Changing splits, re-encoding vocab/labels, altering normalization/time units, filtering/augmenting data.
+
+Implemented models
+- process_transformer (TensorFlow)
+- mtlformer (TensorFlow) [optional; if present]
+
+## Metrics
+- Next Activity: Accuracy (primary), optionally F1.
+- Time predictions: MAE (primary). RMSE/R² optional.
+
+## Analysis and Reporting
+A minimal analysis utility exists at src/analysis/summary.py that aggregates per-fold metrics from outputs/ and produces a naïve ranking.
+
+Quick analysis
+```bash
+make analyze
+# writes outputs/analysis/summary.json
 ```
-pbpm_transformer_benchmark/
-├── configs/                 # Configuration files
-│   └── benchmark.yaml      # Main configuration
-├── data/                   # Data directories
-│   ├── raw/               # Raw event logs (.csv only)
-│   └── processed/         # Preprocessed data (auto-generated)
-├── src/                   # Source code
-│   ├── cli.py            # Command-line interface
-│   ├── data/             # Data processing modules
-│   ├── models/           # Model implementations
-│   ├── tasks/            # Task implementations
-│   ├── training/         # Training utilities
-│   ├── metrics/          # Evaluation metrics
-│   └── utils/            # Utility functions
-├── outputs/              # Experiment outputs
-├── lightning_logs/       # PyTorch Lightning logs
-└── requirements.txt      # Python dependencies
+
+Full statistical analysis (if enabled in your setup)
+```bash
+make analyze_full TASK=next_activity
+# writes outputs/analysis/full_report_next_activity.json
+
+make analyze_all
 ```
 
 ## Make Targets
-
 ```bash
-# Create venv and install deps
-make install
-
-# Run benchmark with defaults (CPU)
-make run
-
-# Run for a specific dataset
-make run_dataset DATASET=Helpdesk
-
-# Run with custom epochs/batch size
-make run_custom EPOCHS=10 BATCH_SIZE=64
-
-# Dataset statistics (one or all)
-make stats DATASET=Helpdesk
+make setup             # one-command onboarding (minimal deps + CV test)
+make install           # full dependency install
+make install_minimal   # minimal dependency install
+make test              # cross-validation sanity test
+make analyze           # lightweight analysis summary
+make analyze_full TASK=next_activity  # full analysis for a task
+make analyze_all       # full analysis for all tasks
+make stats DATASET=Helpdesk  # dataset statistics
 make stats_all
-
-# System info snapshot
-make sysinfo
-
-# Cleanup
-make clean           # caches only
-make clean_outputs   # outputs/ and lightning_logs/
-make clean_processed # data/processed cache
-make clean_all       # everything above
-
-# Linting
-make lint
+make sysinfo           # system info snapshot
+make clean             # clear caches only
+make clean_outputs     # remove outputs/ and lightning_logs/
+make clean_processed   # clear data/processed cache
+make clean_all         # all cleanup targets
 ```
 
-## Hydra Config Overrides
+## Troubleshooting and Known Pitfalls
+- TensorFlow 2.15.1 is often incompatible with Python 3.11/macOS; prefer TF >= 2.20.0 as in pyproject.toml/requirements.txt.
+- If .venv lacks pip, bootstrap with: .venv/bin/python -m ensurepip --upgrade
+- For consistent reporting across machines, note accelerator and versions; MPS behavior can differ.
+- Data availability: ensure CSVs exist under data/raw; use preprocess_action=force to (re)build processed artifacts.
 
-You can override any configuration parameter from the command line:
-
-```bash
-# Override model parameters
-uv run python -m src.cli task=next_activity model.hidden_size=512 model.num_layers=6
-
-# Override training parameters
-uv run python -m src.cli task=next_activity train.max_epochs=20 train.batch_size=64
-
-# Override data parameters
-uv run python -m src.cli task=next_activity data.max_prefix_length=20 data.attribute_mode=extended
-
-# Use specific datasets
-uv run python -m src.cli task=next_activity data.datasets="[Helpdesk,Tourism]"
+## Project Layout
+```
+pbpm_transformer_benchmark/
+├── configs/                 # Hydra configuration files
+│   └── benchmark.yaml       # Main configuration
+├── data/
+│   ├── raw/                 # Raw event logs (.csv)
+│   └── processed/           # Preprocessed cache (auto-generated)
+├── src/
+│   ├── cli.py               # Entry point (Hydra)
+│   ├── data/                # Preprocessing pipeline
+│   ├── models/              # Models and adapters
+│   ├── tasks/               # Task runners
+│   ├── metrics/             # Metrics
+│   └── utils/               # Utilities
+├── outputs/                 # Experiment outputs
+├── lightning_logs/          # Training logs (ignored by VCS)
+├── requirements.txt         # Python dependencies
+└── pyproject.toml           # Project metadata
 ```
 
-## Supported Datasets
+## License
+See LICENSE.txt for licensing information.
 
-The benchmark supports the following datasets:
-- **BPI_Challenge_2012**: Business process intelligence challenge 2012
-- **BPI_Challenge_2019**: Business process intelligence challenge 2019
-- **Helpdesk**: IT service desk process
-- **Road_Traffic_Fine_Management_Process**: Traffic fine management
-- **Sepsis Cases - Event Log**: Healthcare process
-- **Tourism**: Custom tourism industry dataset
-
-## Evaluation Metrics
-
-Each task uses specific evaluation metrics:
-
-- **Next Activity**: Accuracy, F1-Score
-- **Suffix**: Normalized Damerau-Levenshtein Distance
-- **Time Predictions**: MAE, RMSE, R²

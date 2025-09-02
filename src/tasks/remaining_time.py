@@ -223,6 +223,34 @@ class RemainingTimeTask:
             r2 = float(r2_score(y_true, y_hat))
             param_count = int(trainer.count_params())
             
+            # Early-stopping transparency (TF/Keras)
+            es_cfg = self.config.get("train", {})
+            monitor = es_cfg.get("early_stopping_monitor", "val_loss")
+            mode = es_cfg.get("early_stopping_mode", "min")
+            min_delta = float(es_cfg.get("early_stopping_min_delta", 0.0))
+            patience = es_cfg.get("early_stopping_patience", None)
+
+            history_dict = getattr(history, 'history', {}) or {}
+            series_key = monitor if monitor in history_dict else (
+                'val_loss' if 'val_loss' in history_dict else (
+                'val_mae' if 'val_mae' in history_dict else (next(iter(history_dict.keys())) if history_dict else None)))
+            series = history_dict.get(series_key, []) if series_key else []
+            epochs_run = int(len(series)) if series else int(len(history_dict.get('loss', [])))
+
+            best_epoch_idx = None
+            if series:
+                if mode == 'min':
+                    best_epoch_idx = int(np.argmin(series))
+                else:
+                    best_epoch_idx = int(np.argmax(series))
+            early_stopped = False
+            if getattr(self, "_tf_early_stopping", None) is not None:
+                try:
+                    stopped_epoch = int(getattr(self._tf_early_stopping, 'stopped_epoch', 0) or 0)
+                except Exception:
+                    stopped_epoch = 0
+                early_stopped = stopped_epoch > 0 or (epochs_run < int(self.config['train']['max_epochs']))
+
             metrics = {
                 'val_loss': float(val_loss),
                 'val_mae': float(val_mae),
@@ -231,7 +259,16 @@ class RemainingTimeTask:
                 'r2': r2,
                 'train_time_sec': float(train_time),
                 'infer_time_sec': float(infer_time),
-                'param_count': param_count
+                'param_count': param_count,
+                'best_epoch': (None if best_epoch_idx is None else int(best_epoch_idx + 1)),
+                'epochs_run': int(epochs_run),
+                'early_stopped': bool(early_stopped),
+                'early_stopping': {
+                    'monitor': str(monitor),
+                    'mode': str(mode),
+                    'min_delta': float(min_delta),
+                    'patience': (None if patience is None else int(patience))
+                }
             }
             
         else:
@@ -266,6 +303,38 @@ class RemainingTimeTask:
                 param_count = int(sum(p.numel() for p in model.parameters()))
             except Exception:
                 param_count = 0
+            # Early-stopping transparency (PyTorch Lightning)
+            es_cfg = self.config.get('train', {})
+            monitor = es_cfg.get('early_stopping_monitor', 'val_loss')
+            mode = es_cfg.get('early_stopping_mode', 'min')
+            min_delta = float(es_cfg.get('early_stopping_min_delta', 0.0))
+            patience = es_cfg.get('early_stopping_patience', None)
+
+            try:
+                epochs_run = int(getattr(trainer, 'current_epoch', 0)) + 1
+            except Exception:
+                epochs_run = None
+
+            early_stopped = None
+            try:
+                early_stopped = bool(getattr(trainer, 'should_stop', False)) or (
+                    epochs_run is not None and epochs_run < int(self.config['train']['max_epochs'])
+                )
+            except Exception:
+                early_stopped = epochs_run is not None and epochs_run < int(self.config['train']['max_epochs'])
+
+            best_epoch = None
+            try:
+                for cb in getattr(trainer, 'callbacks', []) or []:
+                    if hasattr(cb, 'best_model_path') and cb.best_model_path:
+                        import re
+                        m = re.search(r"model-(\d+)-", cb.best_model_path)
+                        if m:
+                            best_epoch = int(m.group(1))
+                            break
+            except Exception:
+                best_epoch = None
+
             metrics = {
                 'val_loss': val_loss,
                 'val_mae': val_mae,
@@ -274,7 +343,16 @@ class RemainingTimeTask:
                 'r2': r2,
                 'train_time_sec': float(train_time),
                 'infer_time_sec': float(infer_time),
-                'param_count': param_count
+                'param_count': param_count,
+                'best_epoch': best_epoch,
+                'epochs_run': epochs_run,
+                'early_stopped': bool(early_stopped) if early_stopped is not None else None,
+                'early_stopping': {
+                    'monitor': str(monitor),
+                    'mode': str(mode),
+                    'min_delta': float(min_delta),
+                    'patience': (None if patience is None else int(patience))
+                }
             }
         
         # Persist metrics.json
@@ -366,8 +444,11 @@ class RemainingTimeTask:
                     if metric.endswith('_mean'):
                         print(f"{metric}: {value:.4f}")
                 
-                # Save detailed results
-                results_file = outputs_dir / f"{dataset_name}_remaining_time_cv_results.json"
+                # Save detailed results into model-scoped directory to avoid overwrites across models
+                model_name = self.config.get("model", {}).get("name", "unknown_model")
+                model_dir = outputs_dir / dataset_name / "remaining_time" / model_name
+                model_dir.mkdir(parents=True, exist_ok=True)
+                results_file = model_dir / "cv_results.json"
                 with open(results_file, 'w') as f:
                     json.dump(cv_results, f, indent=2, default=str)
                 

@@ -55,14 +55,14 @@ class CanonicalLogsDataLoader:
         Load train and validation data for a specific task and fold.
         
         Args:
-            task: Task name (next_activity, suffix, next_time, remaining_time)
+            task: Task name (next_activity, next_time, remaining_time)
             fold_idx: Fold index (0-4)
             
         Returns:
             Tuple of (train_df, val_df)
         """
-        if task not in ["next_activity", "suffix", "next_time", "remaining_time"]:
-            raise ValueError("Invalid task. Must be one of: next_activity, suffix, next_time, remaining_time")
+        if task not in ["next_activity", "next_time", "remaining_time"]:
+            raise ValueError("Invalid task. Must be one of: next_activity, next_time, remaining_time")
         
         if not 0 <= fold_idx <= 4:
             raise ValueError("Invalid fold index. Must be between 0 and 4")

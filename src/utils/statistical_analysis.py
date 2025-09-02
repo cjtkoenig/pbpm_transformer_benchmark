@@ -15,6 +15,8 @@ import warnings
 import itertools
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+import json
 
 import pymc as pm
 import arviz as az
@@ -349,7 +351,6 @@ class BenchmarkStatisticalAnalysis:
         # Define task-specific ranking directions
         self.task_directions = {
             'next_activity': RankingDirection.HIGHER_BETTER,      # Accuracy - higher is better
-            'suffix': RankingDirection.LOWER_BETTER,              # Distance - lower is better
             'next_time': RankingDirection.LOWER_BETTER,           # MAE - lower is better
             'remaining_time': RankingDirection.LOWER_BETTER       # MAE - lower is better
         }
@@ -378,12 +379,12 @@ class BenchmarkStatisticalAnalysis:
                 if len(available_models) == len(self.model_names):
                     # Create ranking
                     dataset_results = self.results[dataset][task]
-                    reverse = (self.task_directions.get(task, RankingDirection.HIGHER_BETTER) == 
+                    reverse = (self.task_directions.get(task, RankingDirection.HIGHER_BETTER) ==
                               RankingDirection.HIGHER_BETTER)
-                    
+
                     # Sort models by performance
-                    sorted_models = sorted(available_models, 
-                                         key=lambda m: dataset_results[m], 
+                    sorted_models = sorted(available_models,
+                                         key=lambda m: dataset_results[m],
                                          reverse=reverse)
                     
                     # Convert to ranks (1-based)
@@ -527,7 +528,7 @@ class BenchmarkStatisticalAnalysis:
         
         # Perform all pairwise tests
         for i, model1 in enumerate(self.model_names):
-            for model2 in self.model_names[i+1:]:
+            for j, model2 in enumerate(self.model_names[i+1:], i+1):
                 # Collect paired samples (ranks)
                 model1_ranks = []
                 model2_ranks = []
@@ -713,54 +714,100 @@ class BenchmarkStatisticalAnalysis:
         return report
 
 
-# Example usage
-if __name__ == "__main__":
-    # Example results structure: {dataset: {task: {model: metric_value}}}
-    example_results = {
-        "Helpdesk": {
-            "next_activity": {
-                "process_transformer": 0.85
-            },
-            "next_time": {
-                "process_transformer": 2.1
-            }
-        },
-        "BPI_Challenge_2012": {
-            "next_activity": {
-                "process_transformer": 0.78
-            },
-            "next_time": {
-                "process_transformer": 3.2
-            }
-        }
+def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str, float]]]:
+    """Build {dataset: {task: {model: score}}} by reading outputs/analysis/summary.json
+    if present; otherwise, collect from raw fold metrics mimicking analysis.summary.
+    For time tasks we assume higher-is-better scores already inverted in summary.json.
+    """
+    results: Dict[str, Dict[str, Dict[str, float]]] = {}
+    summary_path = outputs_dir / "analysis" / "summary.json"
+    if summary_path.exists():
+        try:
+            summary = json.loads(summary_path.read_text())
+            for dataset, task_map in summary.items():
+                results.setdefault(dataset, {})
+                for task, data in task_map.items():
+                    results[dataset].setdefault(task, {})
+                    for rec in data.get("ranking", []):
+                        m = rec.get("model")
+                        s = rec.get("score")
+                        if isinstance(s, (int, float)):
+                            results[dataset][task][m] = float(s)
+            return results
+        except Exception:
+            pass
+    # Fallback: collect and average like analysis.summary, but we need to import lazily
+    from pathlib import Path as _P
+    import glob, json as _json
+    import numpy as _np
+    prefer_max = {
+        "next_activity": "accuracy",
+        "next_time": "mae",
+        "remaining_time": "mae",
     }
-    
-    model_names = ["process_transformer"]
-    dataset_names = ["Helpdesk", "BPI_Challenge_2012"]
-    
-    # Initialize analysis
-    analysis = BenchmarkStatisticalAnalysis(example_results, model_names, dataset_names)
-    
-    # Generate comprehensive reports for each task
-    for task in ["next_activity", "next_time"]:
-        print(f"\n=== Comprehensive Statistical Report for {task} ===")
-        report = analysis.generate_comprehensive_report(task)
-        
-        print(f"Task direction: {report['task_direction']}")
-        print(f"Average ranks: {report['average_ranks']}")
-        print(f"Friedman test: {report['friedman_test']}")
-        print(f"Best model: {report['summary']['best_model']}")
-        print(f"Valid datasets: {report['summary']['valid_datasets']}")
-        
-        # Print Plackett-Luce results if available
-        if 'plackett_luce' in report and 'error' not in report['plackett_luce']:
-            pl_results = report['plackett_luce']
-            print(f"Plackett-Luce probabilities: {dict(zip(model_names, pl_results['probabilities']))}")
-            print(f"Plackett-Luce log-likelihood: {pl_results['log_likelihood']}")
-        
-        # Print hierarchical Bayes results if available
-        if 'hierarchical_bayes' in report and 'error' not in report['hierarchical_bayes']:
-            hb_results = report['hierarchical_bayes']
-            print(f"Hierarchical Bayes model fitted successfully")
-            if 'pairwise_differences' in hb_results:
-                print(f"Number of pairwise comparisons: {len(hb_results['pairwise_differences'])}")
+    for dataset_dir in outputs_dir.iterdir():
+        if not dataset_dir.is_dir() or dataset_dir.name in ("checkpoints", "analysis"):
+            continue
+        dataset = dataset_dir.name
+        for task_dir in dataset_dir.iterdir():
+            if not task_dir.is_dir():
+                continue
+            task = task_dir.name
+            for model_dir in task_dir.iterdir():
+                if not model_dir.is_dir():
+                    continue
+                model = model_dir.name
+                key = prefer_max.get(task)
+                vals = []
+                for fold_dir in model_dir.iterdir():
+                    if not fold_dir.is_dir():
+                        continue
+                    mfile = fold_dir / "metrics.json"
+                    if mfile.exists():
+                        try:
+                            md = _json.loads(mfile.read_text())
+                            v = md.get(key)
+                            if isinstance(v, (int, float)):
+                                vals.append(float(v))
+                        except Exception:
+                            pass
+                if vals:
+                    score = float(_np.mean(vals))
+                    if task in ("next_time", "remaining_time") and key == "mae":
+                        score = -score
+                    results.setdefault(dataset, {}).setdefault(task, {})[model] = score
+    return results
+
+
+if __name__ == "__main__":
+    import argparse, json
+    from pathlib import Path
+    ap = argparse.ArgumentParser(description="Full statistical analysis CLI (Plackett–Luce, Hierarchical Bayes, Friedman/Wilcoxon)")
+    ap.add_argument("--task", required=True, choices=["next_activity", "next_time", "remaining_time"], help="Task to analyze")
+    ap.add_argument("--outputs", default="outputs", help="Path to outputs directory")
+    ap.add_argument("--no-pl", dest="pl", action="store_false", help="Disable Plackett–Luce fit")
+    ap.add_argument("--no-hb", dest="hb", action="store_false", help="Disable Hierarchical Bayes fit")
+    ap.set_defaults(pl=True, hb=True)
+    args = ap.parse_args()
+
+    outputs_dir = Path(args.outputs)
+    data = _load_summary_or_collect(outputs_dir)
+
+    # Collect model and dataset names where this task appears
+    datasets = sorted([d for d, tmap in data.items() if args.task in tmap])
+    models = sorted({m for d in datasets for m in data[d][args.task].keys()})
+    if not datasets or not models:
+        print(f"No data found for task {args.task} under {outputs_dir}")
+        raise SystemExit(1)
+
+    # Build results dict limited to the selected task
+    results = {d: {args.task: data[d][args.task]} for d in datasets}
+
+    BA = BenchmarkStatisticalAnalysis(results, models, datasets)
+    report = BA.generate_comprehensive_report(args.task, include_plackett_luce=args.pl, include_hierarchical_bayes=args.hb)
+
+    out_dir = outputs_dir / "analysis"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"full_report_{args.task}.json"
+    out_path.write_text(json.dumps(report, indent=2))
+    print(f"Saved full statistical report to {out_path}")

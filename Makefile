@@ -3,12 +3,14 @@
 create_venv:
 	uv venv
 
+# Install full dependencies from requirements.txt (may include TensorFlow pin)
 install: create_venv
 	uv pip install -r requirements.txt
 
-# Optional: dev tools (flake8, pylint, etc.)
-install_dev: install
-	uv pip install -r dev-requirements.txt
+# Install minimal dependencies sufficient to run test_cv.py quickly (no TF required)
+install_minimal: create_venv
+	uv run python -m ensurepip --upgrade || true
+	uv pip install pandas==2.3.1 numpy==1.26.4 "scikit-learn>=1.4,<1.6" scipy==1.16.1
 
 # ===== Linting used for code conformance =====
 
@@ -20,16 +22,27 @@ pylint:
 
 lint: flake8 pylint
 
+# ===== Convenience Help =====
+.PHONY: help
+help:
+	@echo "PBPM Transformer Benchmark - Make targets"; \
+	echo "  setup           Auto-detect OS (macOS/Linux) and run setup_*"; \
+	echo "  setup_macos     Create venv, install minimal deps, run test"; \
+	echo "  setup_linux     Create venv, install minimal deps, run test"; \
+	echo "  setup_windows   Create venv, install minimal deps, run test (Git Bash/PowerShell)"; \
+	echo "  install         Install full deps from requirements.txt"; \
+	echo "  install_minimal Install minimal deps to run tests fast"; \
+	echo "  test            Run CV sanity test (test_cv.py)"; \
+	echo "  preprocess_*    Inspect/force/clear processed data cache"; \
+	echo "  smoke_test      Run chosen MODEL across all datasets and tasks for 1 epoch (mtlformer adds multitask) (ACCELERATOR=cpu|mps|gpu)"; \
+	echo "  clean_*         Clean caches, outputs, processed data";
+
 # Ensure standard folders exist
 dirs:
 	uv run python -c "import pathlib; [pathlib.Path(p).mkdir(parents=True, exist_ok=True) for p in ['data/raw','data/processed','outputs']]"
 
-# Generate sample data
-sample_data: dirs
-	uv run python scripts/get_sample_data.py
-
-# Note: All datasets are already converted to clean CSV format in data/processed/
 # ===== Dataset Statistics =====
+# Note: All datasets are already converted to clean CSV format in data/processed/
 
 # Show statistics for a specific dataset
 stats: dirs
@@ -57,32 +70,6 @@ stats_all: dirs
 			uv run python scripts/dataset_stats.py "$$file"; \
 		fi; \
 	done 2>/dev/null || echo "No datasets found in data/raw/"
-
-# ===== Benchmark Commands =====
-
-# Run full benchmark with cross-validation (5 folds)
-run: dirs
-	uv run python -m src.cli train.accelerator=cpu
-
-# Run with custom dataset
-run_dataset: dirs
-	@echo "Usage: make run_dataset DATASET=your_dataset_name"
-	@echo "Example: make run_dataset DATASET=Helpdesk"
-	@if [ -z "$(DATASET)" ]; then \
-		echo "Error: Please specify DATASET=your_dataset_name"; \
-		exit 1; \
-	fi
-	uv run python -m src.cli data.datasets="[$(DATASET)]" train.accelerator=cpu
-
-# Run with custom training settings
-run_custom: dirs
-	@echo "Usage: make run_custom EPOCHS=10 BATCH_SIZE=64"
-	@if [ -z "$(EPOCHS)" ] || [ -z "$(BATCH_SIZE)" ]; then \
-		echo "Error: Please specify EPOCHS and BATCH_SIZE"; \
-		echo "Example: make run_custom EPOCHS=10 BATCH_SIZE=64"; \
-		exit 1; \
-	fi
-	uv run python -m src.cli train.max_epochs=$(EPOCHS) train.batch_size=$(BATCH_SIZE) train.accelerator=cpu
 
 # System info snapshot
 sysinfo:
@@ -113,8 +100,164 @@ clean_logs:
 
 # Clean processed data
 clean_processed:
-	@echo "Cleaning processed data..."
-	rm -rf data/processed/*.pkl 2>/dev/null || true
+	@echo "Cleaning processed data (removing all cached artifacts under data/processed)..."
+	# Preserve the directory but remove all contents (files and subdirectories)
+	rm -rf data/processed/* 2>/dev/null || true
+	rm -rf data/processed/.* 2>/dev/null || true
 
 clean_all: clean clean_outputs clean_logs clean_processed
 	@echo "Cleaned all generated files and caches"
+
+# ===== Preprocessing Only =====
+# Run preprocessing management actions without training any model.
+# Usage examples:
+#   make preprocess_info
+#   make preprocess_force DATASETS="[\"Helpdesk\"]"
+#   make preprocess_clear                 # clears all processed artifacts
+#   make preprocess_clear DATASET=Helpdesk # clears just one dataset
+.PHONY: preprocess_info preprocess_force preprocess_clear
+
+# Onboarding: OS-specific setup targets
+# These targets aim to get a new user to a passing test_cv.py quickly.
+# They install minimal deps first (fast), then run a sanity test.
+setup_macos: install_minimal dirs
+	@echo "Detected macOS. Python 3.11 recommended. MPS available via train.accelerator=mps."
+	@echo "Note: TensorFlow 2.15.x is often incompatible on Python 3.11/macOS. Prefer TF >= 2.20 if you need TF models."
+	make test
+	@echo "macOS setup complete. Try: make smoke MODEL=process_transformer DATASET=Helpdesk ACCELERATOR=mps"
+
+setup_linux: install_minimal dirs
+	@echo "Detected Linux. Python 3.11 recommended."
+	make test
+	@echo "Linux setup complete."
+
+# Windows notes: Make often runs under Git Bash; uv handles venv well. We use uv run for portability.
+setup_windows: create_venv
+	@echo "Windows setup starting (PowerShell or Git Bash)."
+	uv run python -m ensurepip --upgrade || true
+	uv pip install pandas==2.3.1 numpy==1.26.4 "scikit-learn>=1.4,<1.6" scipy==1.16.1
+	@echo "Running CV sanity test..."
+	uv run python test_cv.py
+	@echo "Windows setup complete. If you need TensorFlow, prefer >=2.20 on Python 3.11."
+
+# Auto-detect setup for Unix shells; prints hint for Windows.
+setup:
+	@if [ "$(OS)" = "Windows_NT" ]; then \
+		echo "On Windows, run: make setup_windows"; \
+	else \
+		UNAME_S=$$(uname -s); \
+		if echo $$UNAME_S | grep -qi "darwin"; then \
+			make setup_macos; \
+		else \
+			make setup_linux; \
+		fi; \
+	fi
+
+preprocess_info: dirs
+	@echo "Showing processed data cache info..."
+	uv run python -m src.cli preprocess_action=info
+
+preprocess_force: dirs
+	@echo "Forcing preprocessing for specified datasets (no training)..."
+	@if [ -z "$(DATASETS)" ]; then \
+		echo "Error: Please provide DATASETS in Hydra list syntax, e.g."; \
+		echo "       make preprocess_force DATASETS=\"[\"Helpdesk\"]\""; \
+		exit 1; \
+	fi; \
+	uv run python -m src.cli preprocess_action=force data.datasets="$(DATASETS)"
+
+preprocess_clear: dirs
+	@if [ -z "$(DATASET)" ]; then \
+		echo "Clearing ALL processed datasets under data/processed (cache only)..."; \
+		uv run python -m src.cli preprocess_action=clear; \
+	else \
+		echo "Clearing processed artifacts for dataset: $(DATASET)"; \
+		uv run python -m src.cli preprocess_action=clear dataset_name=$(DATASET); \
+	fi
+
+# ===== Analysis =====
+.PHONY: analyze analyze_full analyze_all
+analyze: dirs
+	@echo "Running lightweight analysis summary (outputs/analysis/summary.json)..."
+	uv run python -m src.cli analysis.action=run_stats
+
+# Usage: make analyze_full TASK=next_activity
+analyze_full: dirs
+	@if [ -z "$(TASK)" ]; then \
+		echo "Error: Please specify TASK=next_activity|next_time|remaining_time"; \
+		exit 1; \
+	fi; \
+	echo "Running full statistical analysis for task=$(TASK)..."; \
+	uv run python -m src.utils.statistical_analysis --task $(TASK)
+
+# Run full analysis for all tasks
+analyze_all: dirs
+	@for t in next_activity next_time remaining_time; do \
+		echo "Running full statistical analysis for task=$$t..."; \
+		uv run python -m src.utils.statistical_analysis --task $$t || exit $$?; \
+	done
+
+# ===== Smoke Tests =====
+
+# Run a smoke test: chosen model over all datasets and core tasks for 1 epoch each.
+# Usage:
+#   make smoke_test MODEL=process_transformer               # CPU by default
+#   make smoke_test MODEL=process_transformer ACCELERATOR=mps # On Apple Silicon
+# Notes:
+# - Discovers datasets from data/raw/*.csv
+# - Runs tasks: next_activity, remaining_time, next_time, multitask if mtlformer
+# - Trains for 1 epoch per (dataset, task) combination
+.PHONY: smoke_test
+smoke_test: dirs
+	@MODEL_NAME=$${MODEL:-process_transformer}; \
+	ACCEL=$${ACCELERATOR:-cpu}; \
+	FOUND=0; \
+	for file in data/raw/*.csv; do \
+		if [ -f "$$file" ]; then \
+			FOUND=1; \
+			DATASET=$$(basename "$$file" | sed 's/\.[^.]*$$//'); \
+			echo "=== Smoke: model=$$MODEL_NAME dataset=$$DATASET (accelerator=$$ACCEL) ==="; \
+			TASKS="next_activity remaining_time next_time"; \
+			if [ "$$MODEL_NAME" = "mtlformer" ]; then \
+				TASKS="$$TASKS multitask"; \
+			fi; \
+			for TASK in $$TASKS; do \
+				echo "-- Task=$$TASK on $$DATASET for 1 epoch --"; \
+				uv run python -m src.cli \
+					model.name=$$MODEL_NAME \
+					task=$$TASK \
+					data.datasets="[\"$$DATASET\"]" \
+					train.max_epochs=1 \
+					train.accelerator=$$ACCEL || exit $$?; \
+			done; \
+		fi; \
+	done; \
+	if [ $$FOUND -eq 0 ]; then \
+		echo "No datasets found in data/raw/. Place CSVs there (e.g., Helpdesk.csv)."; \
+		exit 1; \
+	fi
+
+# Helpers to list available items
+.PHONY: list_datasets list_tasks list_models
+list_datasets:
+	@echo "Available datasets in data/raw:" && \
+	ls -1 data/raw/*.csv 2>/dev/null | sed 's/.*\///' | sed 's/\.[^.]*$$//' | sort -u || echo "(none)"
+
+list_tasks:
+	@echo "Supported tasks:" && \
+	echo "  - next_activity" && \
+	echo "  - next_time" && \
+	echo "  - remaining_time" && \
+	echo "  - multitask"
+
+# Keep this list in sync with src/models/model_registry.py registrations
+list_models:
+	@echo "Registered models:" && \
+	echo "  - process_transformer" && \
+	echo "  - mtlformer"
+
+# Basic test target (README mentions make test). Runs the CV sanity test.
+.PHONY: test
+test:
+	@echo "Running cross-validation sanity test (test_cv.py)..."
+	uv run python test_cv.py

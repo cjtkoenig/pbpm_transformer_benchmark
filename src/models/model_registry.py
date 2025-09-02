@@ -68,37 +68,6 @@ class ProcessTransformerAdapter(ModelAdapter):
         }
 
 
-# PLACEHOLDER FOR FUTURE MODELS
-class BERTAdapter(ModelAdapter):
-    """Adapter for BERT-based process models (example for future models)."""
-    
-    def __init__(self, task: str):
-        super().__init__("bert_process", task)
-    
-    def adapt_input(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Adapt input for BERT models."""
-        # BERT might expect different tokenization or additional features
-        return {
-            'input_ids': data['token_x'],
-            'attention_mask': data.get('attention_mask', None),
-            'token_type_ids': data.get('token_type_ids', None),
-            'time_features': data.get('time_x', None)
-        }
-    
-    def adapt_output(self, model_output: Any) -> Any:
-        """Adapt output for BERT models."""
-        # BERT might output hidden states that need to be processed
-        return model_output
-    
-    def get_model_config(self, **kwargs) -> Dict[str, Any]:
-        """Get BERT configuration."""
-        return {
-            'max_case_length': kwargs.get('max_case_length', 50),
-            'vocab_size': kwargs.get('vocab_size', 1000),
-            'hidden_size': kwargs.get('hidden_size', 768),
-            'num_attention_heads': kwargs.get('num_attention_heads', 12),
-            'intermediate_size': kwargs.get('intermediate_size', 3072)
-        }
 
 
 class ModelRegistry:
@@ -115,11 +84,6 @@ class ModelRegistry:
                 "framework": "tensorflow",
                 "factory": self._create_mtlformer,
                 "adapter": ProcessTransformerAdapter  # will override via get_adapter for custom handling if needed
-            },
-            "bert_process": {
-                "framework": "pytorch", 
-                "factory": self._create_bert_model,
-                "adapter": BERTAdapter
             }
         }
     
@@ -198,10 +162,6 @@ class ModelRegistry:
             else:
                 raise e
     
-    def _create_bert_model(self, task: str, **kwargs) -> lightning.LightningModule:
-        """Create BERT-based model for PBPM tasks (placeholder for future implementation)."""
-        # This is a placeholder for future BERT model implementation
-        raise NotImplementedError("BERT model not yet implemented")
     
     def _create_mtlformer(self, task: str, **kwargs) -> keras.Model:
         """Create MTLFormer model.
@@ -336,8 +296,6 @@ class ModelRegistry:
             return ["next_activity", "next_time", "remaining_time"]
         elif model_name == "mtlformer":
             return ["next_activity", "next_time", "remaining_time", "multitask"]
-        elif model_name == "bert_process":
-            return ["next_activity", "next_time", "remaining_time"]
         else:
             return []
 

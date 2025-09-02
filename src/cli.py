@@ -37,7 +37,7 @@ def main(config: DictConfig):
     
     # Handle analysis management commands
     if hasattr(config, 'analysis') and getattr(config.analysis, 'action', None) == 'run_stats':
-        from src.analysis.stat_tests import run_stats
+        from src.analysis.summary import run_stats
         report = run_stats(str(project_root / "outputs"))
         print("\nAnalysis summary saved to outputs/analysis/summary.json")
         print(json.dumps(report, indent=2))
@@ -58,16 +58,6 @@ def main(config: DictConfig):
             outputs_dir=outputs_dir
         )
         print(f"\n✓ Next Activity Task completed successfully")
-        print(f"  Results saved to outputs/")
-    elif config.task == "suffix":
-        from src.tasks.suffix import SuffixTask
-        task = SuffixTask(config_dict)
-        results = task.run(
-            datasets=config.data.datasets,
-            raw_directory=project_root / config.data.path_raw,
-            outputs_dir=outputs_dir
-        )
-        print(f"\n✓ Suffix Task completed successfully")
         print(f"  Results saved to outputs/")
     elif config.task == "next_time":
         from src.tasks.next_time import NextTimeTask
@@ -103,7 +93,7 @@ def main(config: DictConfig):
     else:
         raise ValueError(f"Task '{config.task}' not implemented yet")
 
-    # Minimal environment capture (extended)
+    # environment capture
     try:
         import tensorflow as tf
         tf_version = tf.__version__

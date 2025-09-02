@@ -94,7 +94,7 @@ class CanonicalLogsProcessor:
         val = range(len(keys))
 
         x_word_dict = dict(zip(keys, val))
-        # y vocab does not need PAD/UNK, but must include EOC for next-activity and suffix labels
+        # y vocab does not need PAD/UNK, but must include EOC for next-activity labels
         y_word_dict = {act: idx for idx, act in enumerate(sorted(activities))}
 
         # Save metadata
@@ -190,26 +190,6 @@ class CanonicalLogsProcessor:
                 })
         return pd.DataFrame(rows, columns=["case_id", "prefix", "k", "remaining_time_days", "recent_time", "latest_time", "time_passed"]).reset_index(drop=True)
     
-    def _process_suffix(self, df: pd.DataFrame, eoc_token: str) -> pd.DataFrame:
-        """Process data for suffix prediction task.
-        Produces rows with [case_id, prefix, k, suffix_sequence] where suffix_sequence
-        is the space-separated remaining activities after the prefix, terminated by EOC.
-        """
-        rows = []
-        for case, group in df.groupby("Case ID", sort=False):
-            case_activities = group["Activity"].tolist()
-            n = len(case_activities)
-            for i in range(n):
-                prefix = " ".join(case_activities[: i + 1])
-                remaining = case_activities[i + 1 :]
-                suffix_seq = " ".join(remaining + [eoc_token])
-                rows.append({
-                    "case_id": case,
-                    "prefix": prefix,
-                    "k": i,
-                    "suffix_sequence": suffix_seq,
-                })
-        return pd.DataFrame(rows, columns=["case_id", "prefix", "k", "suffix_sequence"]).reset_index(drop=True)
     
     def process_dataset(self, random_state: int = 42, eoc_token: str = "<eoc>") -> Dict[str, Any]:
         """
@@ -251,10 +231,6 @@ class CanonicalLogsProcessor:
         tasks_data['remaining_time'] = remaining_time_df
         print(f"Remaining time: {len(remaining_time_df)} samples")
         
-        # Suffix Prediction (full remaining sequence including EOC)
-        suffix_df = self._process_suffix(df, eoc_token=eoc_token)
-        tasks_data['suffix'] = suffix_df
-        print(f"Suffix: {len(suffix_df)} samples")
         
         # Create canonical splits for each task
         cv = CanonicalCrossValidation(n_folds=5, random_state=random_state)
