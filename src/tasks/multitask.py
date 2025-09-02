@@ -11,7 +11,7 @@ from ..data.loader import CanonicalLogsDataLoader
 from ..data.preprocessor import SimplePreprocessor
 from ..data.encoders import Vocabulary
 from ..metrics import accuracy_score, mean_absolute_error, mean_squared_error, r2_score
-from ..utils.cross_validation import CanonicalCrossValidation
+from ..utils.cross_validation import CanonicalCrossValidation, aggregate_cv_results
 
 
 class MultiTaskLearningTask:
@@ -219,8 +219,11 @@ class MultiTaskLearningTask:
             loader = CanonicalLogsDataLoader(dataset_name, str(processed_directory))
 
             # CV folds are derived from per-task canonical splits; we iterate over fold indices based on one task
-            splits_info = loader.get_splits_info("next_activity")
-            n_folds = splits_info.get('n_folds', self.config['cv'].get('n_folds', 5)) or 5
+            splits_info_na = loader.get_splits_info("next_activity")
+            splits_info_nt = loader.get_splits_info("next_time")
+            splits_info_rt = loader.get_splits_info("remaining_time")
+            n_folds = (splits_info_na.get('n_folds')
+                       or self.config['cv'].get('n_folds', 5) or 5)
 
             fold_metrics = []
             for fold_idx in range(n_folds):
@@ -244,13 +247,76 @@ class MultiTaskLearningTask:
                     aggregated[f"{key}_max"] = mx
                     aggregated[f"{key}_values"] = lst
 
-            # Persist
+            # Persist multitask aggregate
             model_name = self.config.get("model", {}).get("name", "mtlformer")
             out_dir = outputs_dir / dataset_name / "multitask" / model_name
             out_dir.mkdir(parents=True, exist_ok=True)
             (out_dir / "cv_metrics.json").write_text(json.dumps({
                 'fold_metrics': fold_metrics,
                 'cv_summary': aggregated,
+                'dataset_name': dataset_name,
+            }, indent=2))
+
+            # Additionally, emit per-task reports to match single-task layout for comparability
+            # Build per-task fold results and write fold-level metrics.json
+            # Next Activity
+            na_fold_results = []
+            for i, fm in enumerate(fold_metrics):
+                fold_dir = outputs_dir / dataset_name / "next_activity" / model_name / f"fold_{i}"
+                fold_dir.mkdir(parents=True, exist_ok=True)
+                na_metrics = {
+                    'accuracy': float(fm['next_activity_accuracy'])
+                }
+                (fold_dir / "metrics.json").write_text(json.dumps(na_metrics, indent=2))
+                na_fold_results.append({'fold_idx': i, 'metrics': na_metrics})
+            na_cv = aggregate_cv_results(na_fold_results)
+            na_dir = outputs_dir / dataset_name / "next_activity" / model_name
+            na_dir.mkdir(parents=True, exist_ok=True)
+            (na_dir / "cv_results.json").write_text(json.dumps({
+                'fold_results': na_fold_results,
+                'cv_summary': na_cv,
+                'dataset_name': dataset_name,
+            }, indent=2))
+
+            # Next Time
+            nt_fold_results = []
+            for i, fm in enumerate(fold_metrics):
+                fold_dir = outputs_dir / dataset_name / "next_time" / model_name / f"fold_{i}"
+                fold_dir.mkdir(parents=True, exist_ok=True)
+                nt_metrics = {
+                    'mae': float(fm['next_time_mae']),
+                    'mse': float(fm['next_time_mse']),
+                    'r2': float(fm['next_time_r2'])
+                }
+                (fold_dir / "metrics.json").write_text(json.dumps(nt_metrics, indent=2))
+                nt_fold_results.append({'fold_idx': i, 'metrics': nt_metrics})
+            nt_cv = aggregate_cv_results(nt_fold_results)
+            nt_dir = outputs_dir / dataset_name / "next_time" / model_name
+            nt_dir.mkdir(parents=True, exist_ok=True)
+            (nt_dir / "cv_results.json").write_text(json.dumps({
+                'fold_results': nt_fold_results,
+                'cv_summary': nt_cv,
+                'dataset_name': dataset_name,
+            }, indent=2))
+
+            # Remaining Time
+            rt_fold_results = []
+            for i, fm in enumerate(fold_metrics):
+                fold_dir = outputs_dir / dataset_name / "remaining_time" / model_name / f"fold_{i}"
+                fold_dir.mkdir(parents=True, exist_ok=True)
+                rt_metrics = {
+                    'mae': float(fm['remaining_time_mae']),
+                    'mse': float(fm['remaining_time_mse']),
+                    'r2': float(fm['remaining_time_r2'])
+                }
+                (fold_dir / "metrics.json").write_text(json.dumps(rt_metrics, indent=2))
+                rt_fold_results.append({'fold_idx': i, 'metrics': rt_metrics})
+            rt_cv = aggregate_cv_results(rt_fold_results)
+            rt_dir = outputs_dir / dataset_name / "remaining_time" / model_name
+            rt_dir.mkdir(parents=True, exist_ok=True)
+            (rt_dir / "cv_results.json").write_text(json.dumps({
+                'fold_results': rt_fold_results,
+                'cv_summary': rt_cv,
                 'dataset_name': dataset_name,
             }, indent=2))
 

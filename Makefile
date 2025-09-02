@@ -199,43 +199,33 @@ analyze_all: dirs
 
 # ===== Smoke Tests =====
 
-# Run a smoke test: chosen model over all datasets and core tasks for 1 epoch each.
-# Usage:
-#   make smoke_test MODEL=process_transformer               # CPU by default
-#   make smoke_test MODEL=process_transformer ACCELERATOR=mps # On Apple Silicon
-# Notes:
-# - Discovers datasets from data/raw/*.csv
-# - Runs tasks: next_activity, remaining_time, next_time, multitask if mtlformer
-# - Trains for 1 epoch per (dataset, task) combination
-.PHONY: smoke_test
-smoke_test: dirs
-	@MODEL_NAME=$${MODEL:-process_transformer}; \
-	ACCEL=$${ACCELERATOR:-cpu}; \
-	FOUND=0; \
-	for file in data/raw/*.csv; do \
-		if [ -f "$$file" ]; then \
-			FOUND=1; \
-			DATASET=$$(basename "$$file" | sed 's/\.[^.]*$$//'); \
-			echo "=== Smoke: model=$$MODEL_NAME dataset=$$DATASET (accelerator=$$ACCEL) ==="; \
-			TASKS="next_activity remaining_time next_time"; \
-			if [ "$$MODEL_NAME" = "mtlformer" ]; then \
-				TASKS="$$TASKS multitask"; \
-			fi; \
-			for TASK in $$TASKS; do \
-				echo "-- Task=$$TASK on $$DATASET for 1 epoch --"; \
-				uv run python -m src.cli \
-					model.name=$$MODEL_NAME \
-					task=$$TASK \
-					data.datasets="[\"$$DATASET\"]" \
-					train.max_epochs=1 \
-					train.accelerator=$$ACCEL || exit $$?; \
-			done; \
-		fi; \
-	done; \
-	if [ $$FOUND -eq 0 ]; then \
-		echo "No datasets found in data/raw/. Place CSVs there (e.g., Helpdesk.csv)."; \
-		exit 1; \
-	fi
+# Split smoke tests into two fixed, non-variable targets as requested.
+# 1) process_transformer on its three tasks (next_activity, next_time, remaining_time)
+# 2) mtlformer on multitask
+# Each runs exactly 2 epochs on the three specified datasets.
+
+.PHONY: smoke_test_minimal
+smoke_test_minimal: dirs
+		@echo "=== Smoke: process_transformer on Helpdesk (next_activity, 3 epochs) ==="; \
+	uv run python -m src.cli task=next_activity data.datasets="[\"Helpdesk\"]"; \
+
+.PHONY: smoke_test_process_transformer
+smoke_test_process_transformer: dirs
+	@echo "=== Smoke: process_transformer on Helpdesk (3 tasks, 2 epochs) ==="; \
+	uv run python -m src.cli model.name=process_transformer task=next_activity data.datasets="[\"Helpdesk\"]" train.max_epochs=2; \
+	uv run python -m src.cli model.name=process_transformer task=next_time data.datasets="[\"Helpdesk\"]" train.max_epochs=2; \
+	uv run python -m src.cli model.name=process_transformer task=remaining_time data.datasets="[\"Helpdesk\"]" train.max_epochs=2; \
+	echo "=== Smoke: process_transformer on Sepsis Cases - Event Log (3 tasks, 2 epochs) ==="; \
+	uv run python -m src.cli model.name=process_transformer task=next_activity data.datasets="[\"Sepsis Cases - Event Log\"]" train.max_epochs=2; \
+	uv run python -m src.cli model.name=process_transformer task=next_time data.datasets="[\"Sepsis Cases - Event Log\"]" train.max_epochs=2; \
+	uv run python -m src.cli model.name=process_transformer task=remaining_time data.datasets="[\"Sepsis Cases - Event Log\"]" train.max_epochs=2;
+
+.PHONY: smoke_test_mtlformer
+smoke_test_mtlformer: dirs
+	@echo "=== Smoke: mtlformer multitask on Helpdesk (2 epochs) ==="; \
+	uv run python -m src.cli model.name=mtlformer task=multitask data.datasets="[\"Helpdesk\"]" train.max_epochs=2; \
+	echo "=== Smoke: mtlformer multitask on Sepsis Cases - Event Log (2 epochs) ==="; \
+	uv run python -m src.cli model.name=mtlformer task=multitask data.datasets="[\"Sepsis Cases - Event Log\"]" train.max_epochs=2;
 
 # Helpers to list available items
 .PHONY: list_datasets list_tasks list_models
@@ -248,7 +238,7 @@ list_tasks:
 	echo "  - next_activity" && \
 	echo "  - next_time" && \
 	echo "  - remaining_time" && \
-	echo "  - multitask"
+	echo "  - multitask (for mtlformer only)"
 
 # Keep this list in sync with src/models/model_registry.py registrations
 list_models:

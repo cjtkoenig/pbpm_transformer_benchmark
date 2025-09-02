@@ -48,6 +48,21 @@ def main(config: DictConfig):
         handle_preprocess_action(config, project_root)
         return
     
+    # Safety barrier: enforce model-task compatibility
+    model_name = str(getattr(config.model, 'name', 'process_transformer'))
+    task_name = str(config.task)
+    single_tasks = {"next_activity", "next_time", "remaining_time"}
+    if model_name == "mtlformer" and task_name in single_tasks:
+        raise ValueError(
+            "Invalid configuration: mtlformer only supports task=multitask. "
+            "Please run: uv run python -m src.cli task=multitask model.name=mtlformer"
+        )
+    if model_name == "process_transformer" and task_name == "multitask":
+        raise ValueError(
+            "Invalid configuration: process_transformer does not support task=multitask. "
+            "Please choose one of: next_activity, next_time, remaining_time"
+        )
+    
     # Route to appropriate task based on config
     if config.task == "next_activity":
         from src.tasks.next_activity import NextActivityTask

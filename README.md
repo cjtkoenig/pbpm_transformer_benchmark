@@ -20,7 +20,9 @@ Table of Contents
 
 ## Overview
 - Canonical tasks: next activity, next time, remaining time.
+  - multitask for MTLFormer only.
 - Centralized preprocessing: prefixes, activity encoding, numeric normalization, End‑of‑Case token (<eoc>), cached under data/processed.
+  - Different Graph-based preprocessing for PGTNet only.
 - Reproducible 5‑fold cross‑validation with persisted, case-based splits and fixed seeds.
 - Adapters reshape data only; they must not change content, labels, vocabularies, or splits.
 - Minimal environment snapshot is written to outputs/env.json for reproducibility.
@@ -93,15 +95,29 @@ uv run python -m src.cli preprocess_action=clear
 
 ## Running Tasks
 ```bash
-# Next activity
-uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]"
+# Next activity (ProcessTransformer)
+uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" model.name=process_transformer
 
-# Next time
-uv run python -m src.cli task=next_time data.datasets="[Helpdesk]"
+# Next time (ProcessTransformer)
+uv run python -m src.cli task=next_time data.datasets="[Helpdesk]" model.name=process_transformer
 
-# Remaining time
-uv run python -m src.cli task=remaining_time data.datasets="[Helpdesk]"
+# Remaining time (ProcessTransformer)
+uv run python -m src.cli task=remaining_time data.datasets="[Helpdesk]" model.name=process_transformer
+
+# Multitask (MTLFormer) — trains a single multi-output model and reports per-task metrics comparable to single-task runs
+uv run python -m src.cli task=multitask data.datasets="[Helpdesk]" model.name=mtlformer
 ```
+
+Safety constraints (enforced by CLI)
+- ProcessTransformer supports only single tasks: next_activity, next_time, remaining_time. Using task=multitask will raise an error.
+- MTLFormer supports only multitask. Using it on single tasks will raise an error.
+
+Reporting for MTLFormer
+- Although MTLFormer runs in multitask mode only, the runner writes per-task outputs so they are directly comparable with single-task models:
+  - outputs/<dataset>/next_activity/mtlformer/cv_results.json
+  - outputs/<dataset>/next_time/mtlformer/cv_results.json
+  - outputs/<dataset>/remaining_time/mtlformer/cv_results.json
+- This preserves the benchmark methodology and analysis compatibility.
 
 ## Configuration (Hydra)
 Entry point: src/cli.py with configs under configs/. Canonical config is configs/benchmark.yaml. Override via Hydra dot-notation.
@@ -124,7 +140,7 @@ uv run python -m src.cli task=next_activity data.datasets="[Helpdesk,Tourism]"
 Config reference (excerpt)
 ```yaml
 # Task selection
-task: next_activity  # next_activity | next_time | remaining_time | (multitask for mtlformer)
+task: next_activity  # next_activity | next_time | remaining_time | (multitask for mtlformer only)
 
 # Data configuration
 data:
