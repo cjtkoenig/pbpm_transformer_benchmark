@@ -80,15 +80,22 @@ class NextTimeTask:
         from ..models.model_registry import create_model
         if max_case_length is None:
             max_case_length = self.config["model"].get("max_case_length", 50)
+        # Resolve per-model hyperparameters with fallback to global model.*
+        _m = self.config.get("model", {})
+        _name = _m.get("name", "process_transformer")
+        _pm = (_m.get("per_model", {}) or {}).get(_name, {})
+        embed_dim = _pm.get("embed_dim", _m.get("embed_dim", 36))
+        num_heads = _pm.get("num_heads", _m.get("num_heads", 4))
+        ff_dim = _pm.get("ff_dim", _m.get("ff_dim", 64))
         return create_model(
-            name=self.config["model"].get("name", "process_transformer"),
+            name=_name,
             task="next_time",
             vocab_size=vocab_size,
             max_case_length=max_case_length,
             output_dim=output_dim,
-            embed_dim=self.config["model"].get("embed_dim", 36),
-            num_heads=self.config["model"].get("num_heads", 4),
-            ff_dim=self.config["model"].get("ff_dim", 64)
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            ff_dim=ff_dim
         )
     
     def create_trainer(self, model, checkpoint_dir: Path = None):
@@ -105,7 +112,7 @@ class NextTimeTask:
                 patience=self.config.get("train", {}).get("early_stopping_patience", None) or 0,
                 min_delta=self.config.get("train", {}).get("early_stopping_min_delta", 0.0),
                 mode=self.config.get("train", {}).get("early_stopping_mode", "min"),
-                restore_best_weights=True
+                restore_best_weights=self.config.get("train", {}).get("restore_best_weights", True)
             ) if self.config.get("train", {}).get("early_stopping_patience", None) is not None else None
             return model
         else:
@@ -114,12 +121,14 @@ class NextTimeTask:
             
             if checkpoint_dir:
                 checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                monitor = self.config["train"].get("early_stopping_monitor", 'val_loss')
+                mode = self.config["train"].get("early_stopping_mode", 'min')
                 checkpoint_callback = ModelCheckpoint(
                     dirpath=checkpoint_dir,
-                    filename='model-{epoch:02d}-{val_loss:.2f}',
-                    monitor='val_loss',
-                    mode='min',
-                    save_top_k=3,
+                    filename='model-{epoch:02d}-{'+monitor+':.2f}',
+                    monitor=monitor,
+                    mode=mode,
+                    save_top_k=1,
                     save_last=True
                 )
                 callbacks.append(checkpoint_callback)
@@ -290,7 +299,7 @@ class NextTimeTask:
             
             # Evaluate
             eval_start = time.time()
-            results = trainer.validate(model, datamodule)
+            results = trainer.validate(model, datamodule, ckpt_path='best')
             infer_time = time.time() - eval_start
             
             # Extract metrics

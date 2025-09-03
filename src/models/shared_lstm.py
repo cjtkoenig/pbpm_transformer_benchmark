@@ -1,5 +1,16 @@
 """
-Shared LSTM with attention (activities-only variant).
+Shared LSTM with attention (extended-mode placeholder).
+
+This module is reserved for the extended attribute mode (activities + roles + per-step time)
+for next-activity prediction on supported datasets (initially: BPI_Challenge_2012).
+
+Current status:
+- Only task='next_activity' will be supported.
+- Extended attribute_mode is required and not implemented yet. This file deliberately
+  raises NotImplementedError until the extended implementation is added.
+- The activities-only implementation has been factored out into
+  src/models/activity_only_lstm.py and registered as 'activity_only_lstm'.
+"
 
 This adapts the "shared" attention LSTM from:
 - https://github.com/ZhipengHe/Shared-and-Specialised-Attention-based-Interpretable-Models
@@ -84,30 +95,13 @@ def get_next_activity_model(
     l2reg: float = 1e-4,
     attribute_mode: str = "minimal",
 ) -> Model:
-    """Create the activities-only shared LSTM model for next-activity.
+    """Shared LSTM for next-activity (extended-mode only placeholder).
 
-    Parameters align with the specialised variant for consistent configuration.
-    Returns: tf.keras.Model with inputs [ac_tokens] and softmax outputs over output_dim.
+    Currently not implemented. This model will support only attribute_mode='extended' and only
+    for BPI_Challenge_2012 dataset in this benchmark. Use 'activity_only_lstm'
+    for activities-only runs (attribute_mode='minimal').
     """
-    # Input: integer activity tokens [B, T]
-    ac_input = layers.Input(shape=(max_case_length,), dtype="int32", name="ac_input")
-
-    # Activity embedding
-    x = layers.Embedding(input_dim=vocab_size, output_dim=embed_dim, name="ac_embedding")(ac_input)  # [B, T, D]
-
-    # Shared attention (alpha+beta) over a single stream
-    context, alpha, beta = TimestepAndFeatureAttention(
-        hidden_alpha=lstm_size_alpha,
-        hidden_beta=lstm_size_beta,
-        l2reg=l2reg,
-        dropout=dropout_input,
-    )(x)
-
-    # Context dropout
-    context = layers.Dropout(dropout_context, name="context_dropout")(context)
-
-    # Softmax head
-    out = layers.Dense(output_dim, activation="softmax", kernel_initializer="glorot_uniform", name="act_output")(context)
-
-    model = Model(inputs=[ac_input], outputs=out, name="shared_lstm_next_activity")
-    return model
+    if attribute_mode != "extended":
+        raise NotImplementedError(
+            "shared_lstm is reserved for extended attribute mode. Please set data.attribute_mode='extended' and use 'activity_only_lstm' for activities-only.")
+    raise NotImplementedError("shared_lstm extended-mode implementation is pending.")

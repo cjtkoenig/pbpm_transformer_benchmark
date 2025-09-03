@@ -99,15 +99,22 @@ class MultiTaskLearningTask:
 
     def _create_model(self, vocab_size: int, max_case_length: int):
         from ..models.model_registry import create_model
+        # Resolve per-model hyperparameters with fallback to global model.*
+        _m = self.config.get("model", {})
+        _name = _m.get("name", "mtlformer")
+        _pm = (_m.get("per_model", {}) or {}).get(_name, {})
+        embed_dim = _pm.get("embed_dim", _m.get("embed_dim", 36))
+        num_heads = _pm.get("num_heads", _m.get("num_heads", 4))
+        ff_dim = _pm.get("ff_dim", _m.get("ff_dim", 64))
         return create_model(
-            name=self.config["model"].get("name", "mtlformer"),
+            name=_name,
             task="multitask",
             vocab_size=vocab_size,
             max_case_length=max_case_length,
             output_dim=vocab_size,
-            embed_dim=self.config["model"].get("embed_dim", 36),
-            num_heads=self.config["model"].get("num_heads", 4),
-            ff_dim=self.config["model"].get("ff_dim", 64),
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            ff_dim=ff_dim,
         )
 
     def _compile_model(self, model: keras.Model):
@@ -161,7 +168,7 @@ class MultiTaskLearningTask:
                 patience=self.config.get("train", {}).get("early_stopping_patience", 0),
                 min_delta=self.config.get("train", {}).get("early_stopping_min_delta", 0.0),
                 mode=self.config.get("train", {}).get("early_stopping_mode", "min"),
-                restore_best_weights=True
+                restore_best_weights=self.config.get("train", {}).get("restore_best_weights", True)
             ))
 
         history = model.fit(

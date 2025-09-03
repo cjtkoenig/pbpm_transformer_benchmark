@@ -16,7 +16,7 @@ def test_cv():
     cv = CanonicalCrossValidation(n_folds=5, random_state=42)
     
     # Check if splits exist
-    processed_dir = Path("data/processed")
+    processed_dir = Path("../data/processed")
     dataset_name = "Helpdesk"
     
     # Try to load splits info

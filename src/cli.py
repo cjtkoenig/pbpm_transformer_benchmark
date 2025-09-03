@@ -11,6 +11,28 @@ from src.data.preprocessor import SimplePreprocessor
 
 @hydra.main(version_base=None, config_path="../configs", config_name="benchmark")
 def main(config: DictConfig):
+    # Resolve learning rate with explicit per-model defaults
+    model_name = str(getattr(config.model, 'name', 'process_transformer'))
+    lr_scalar = getattr(config.train, 'learning_rate', None)
+    lr_map = getattr(config.train, 'learning_rates', None)
+    if lr_scalar is not None:
+        resolved_lr = float(lr_scalar)
+        lr_source = 'train.learning_rate override'
+    elif lr_map is not None and model_name in lr_map:
+        resolved_lr = float(lr_map[model_name])
+        lr_source = f'train.learning_rates[{model_name}]'
+    else:
+        raise ValueError(
+            f"No learning rate defined for model '{model_name}'. "
+            "Provide train.learning_rate or add an entry under train.learning_rates."
+        )
+    config.train.learning_rate = resolved_lr
+
+    # Fixed outputs directory under project root (no config)
+    project_root = Path(hydra.utils.get_original_cwd())
+    outputs_dir = project_root / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+
     # Print clean configuration header
     print("\n" + "=" * 80)
     print(" PBPM TRANSFORMER BENCHMARK")
@@ -22,13 +44,10 @@ def main(config: DictConfig):
     print(f"Cross-validation: {config.cv.n_folds} folds")
     print(f"Batch size:     {config.train.batch_size}")
     print(f"Max epochs:     {config.train.max_epochs}")
-    print(f"Learning rate:  {config.train.learning_rate}")
+    print(f"Learning rate:  {config.train.learning_rate} ({lr_source})")
     print(f"Seed:           {config.seed}")
+    print(f"Outputs dir:    {outputs_dir}")
     print()
-
-    project_root = Path(hydra.utils.get_original_cwd())
-    outputs_dir = project_root / "outputs"
-    outputs_dir.mkdir(parents=True, exist_ok=True)
 
     set_all_seeds(config.seed)
 
@@ -38,8 +57,8 @@ def main(config: DictConfig):
     # Handle analysis management commands
     if hasattr(config, 'analysis') and getattr(config.analysis, 'action', None) == 'run_stats':
         from src.analysis.summary import run_stats
-        report = run_stats(str(project_root / "outputs"))
-        print("\nAnalysis summary saved to outputs/analysis/summary.json")
+        report = run_stats(str(outputs_dir))
+        print(f"\nAnalysis summary saved to {outputs_dir}/analysis/summary.json")
         print(json.dumps(report, indent=2))
         return
 
@@ -62,6 +81,33 @@ def main(config: DictConfig):
             "Invalid configuration: process_transformer does not support task=multitask. "
             "Please choose one of: next_activity, next_time, remaining_time"
         )
+    if model_name == "activity_only_lstm":
+        if task_name != "next_activity":
+            raise ValueError(
+                "Invalid configuration: activity_only_lstm supports only task=next_activity."
+            )
+        attr_mode = str(getattr(config.data, 'attribute_mode', 'minimal'))
+        if attr_mode != 'minimal':
+            raise ValueError(
+                "Invalid configuration: activity_only_lstm is an activities-only model. "
+                "Please set data.attribute_mode=minimal."
+            )
+    if model_name in {"shared_lstm", "specialised_lstm"}:
+        if task_name != "next_activity":
+            raise ValueError("Invalid configuration: shared_lstm/specialised_lstm support only task=next_activity.")
+        attr_mode = str(getattr(config.data, 'attribute_mode', 'minimal'))
+        if attr_mode != 'extended':
+            raise ValueError(
+                "Invalid configuration: shared_lstm and specialised_lstm are reserved for extended attribute mode. "
+                "Please set data.attribute_mode=extended. For activities-only, use model.name=activity_only_lstm."
+            )
+        # Dataset restriction (temporary, per issue requirements)
+        ds = list(getattr(config.data, 'datasets', []))
+        if len(ds) != 1 or ds[0] != "BPI_Challenge_2012":
+            raise ValueError(
+                "Invalid configuration: shared_lstm and specialised_lstm (extended mode) are currently restricted to dataset 'BPI_Challenge_2012'. "
+                "Please set data.datasets=['BPI_Challenge_2012']."
+            )
     
     # Route to appropriate task based on config
     if config.task == "next_activity":

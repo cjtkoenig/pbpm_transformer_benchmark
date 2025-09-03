@@ -35,6 +35,7 @@ help:
 	echo "  test            Run CV sanity test (test_cv.py)"; \
 	echo "  preprocess_*    Inspect/force/clear processed data cache"; \
 	echo "  smoke_test      Run chosen MODEL across all datasets and tasks for 1 epoch (mtlformer adds multitask) (ACCELERATOR=cpu|mps|gpu)"; \
+	echo "  run_benchmark_minimal_mode  Force preprocess and run all models/tasks on minimal attributes for 10 epochs"; \
 	echo "  clean_*         Clean caches, outputs, processed data";
 
 # Ensure standard folders exist
@@ -208,8 +209,8 @@ analyze_all: dirs
 
 .PHONY: smoke_test_minimal
 smoke_test_minimal: dirs
-	@echo "=== Smoke: process_transformer on Helpdesk (next_activity, 3 epochs) ==="; \
-	uv run python -m src.cli task=next_activity data.datasets="[\"Helpdesk\"]";
+	@echo "=== Smoke: process_transformer on Helpdesk (next_activity, 15 epochs) ==="; \
+	uv run python -m src.cli task=next_activity data.datasets="[\"Helpdesk\"]" train.max_epochs=15;
 
 .PHONY: smoke_test_process_transformer
 smoke_test_process_transformer: dirs
@@ -220,8 +221,13 @@ smoke_test_process_transformer: dirs
 
 .PHONY: smoke_test_mtlformer
 smoke_test_mtlformer: dirs
-	@echo "=== Smoke: mtlformer multitask on Helpdesk (2 epochs) ==="; \
-	uv run python -m src.cli model.name=mtlformer task=multitask data.datasets="[\"Helpdesk\"]" train.max_epochs=2;
+	@echo "=== Smoke: mtlformer multitask on Helpdesk (15 epochs) ==="; \
+	uv run python -m src.cli model.name=mtlformer task=multitask data.datasets="[\"Helpdesk\"]" train.max_epochs=15;
+
+.PHONY: smoke_test_activity_only_lstm
+smoke_test_activity_only_lstm: dirs
+	@echo "=== Smoke: activity_only_lstm next_activity on Helpdesk (15 epochs) ==="; \
+	uv run python -m src.cli model.name=activity_only_lstm task=next_activity data.datasets="[\"Helpdesk\"]" train.max_epochs=15;
 
 .PHONY: smoke_test_specialised_lstm
 smoke_test_specialised_lstm: dirs
@@ -251,6 +257,7 @@ list_models:
 	@echo "Registered models:" && \
 		echo "  - process_transformer" && \
 		echo "  - mtlformer" && \
+		echo "  - activity_only_lstm" && \
 		echo "  - specialised_lstm" && \
 		echo "  - shared_lstm"
 
@@ -259,3 +266,27 @@ list_models:
 test:
 	@echo "Running cross-validation sanity test (test_cv.py)..."
 	uv run python test_cv.py
+
+
+# ===== Full Benchmark: Minimal Mode (activities-only) =====
+.PHONY: run_benchmark_minimal_mode
+run_benchmark_minimal_mode: dirs
+	@echo "=== PBPM Benchmark: Minimal Mode (activities only) ==="; \
+	echo "Datasets: BPI_Challenge_2012, Helpdesk, Road_Traffic_Fine_Management_Process, Sepsis Cases - Event Log, Tourism"; \
+	echo "Step 1/2: Force preprocessing for all datasets..."; \
+	UV="uv run python -m src.cli"; \
+	DATASETS="[\"BPI_Challenge_2012\", \"Helpdesk\", \"Road_Traffic_Fine_Management_Process\", \"Sepsis Cases - Event Log\", \"Tourism\"]"; \
+	$$UV preprocess_action=force data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
+	echo "Step 2/2: Train/Evaluate all models and tasks (10 epochs, attribute_mode=minimal)"; \
+	echo "--- ProcessTransformer: next_activity ---"; \
+	$$UV model.name=process_transformer task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=1e-2 || exit $$?; \
+	echo "--- ProcessTransformer: next_time ---"; \
+	$$UV model.name=process_transformer task=next_time data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=1e-2 || exit $$?; \
+	echo "--- ProcessTransformer: remaining_time ---"; \
+	$$UV model.name=process_transformer task=remaining_time data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=1e-2 || exit $$?; \
+	echo "--- MTLFormer: multitask ---"; \
+	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=2e-3 || exit $$?; \
+	echo "--- Activity-Only LSTM: next_activity ---"; \
+	$$UV model.name=activity_only_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=1e-3 || exit $$?; \
+	echo "=== Benchmark completed. Outputs written under outputs/ ==="; \
+	echo "Note: outputs/env.json is overwritten by each run; refer to per-model outputs under outputs/<dataset>/<task>/<model>/";

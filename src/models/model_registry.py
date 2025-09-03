@@ -205,6 +205,8 @@ class ModelRegistry:
             return ["next_activity"]
         elif model_name == "shared_lstm":
             return ["next_activity"]
+        elif model_name == "activity_only_lstm":
+            return ["next_activity"]
         else:
             return []
 
@@ -230,6 +232,14 @@ def specialised_lstm_factory(task: str, **kwargs):
     if task != "next_activity":
         raise NotImplementedError("specialised_lstm supports only task='next_activity'")
     from .specialised_lstm import get_next_activity_model as get_specialised
+    # Enforce extended-only placeholder
+    attr_mode = kwargs.get("attribute_mode", "minimal")
+    if attr_mode != "extended":
+        raise NotImplementedError("specialised_lstm is only available for attribute_mode='extended' Use 'activity_only_lstm' for activities-only.")
+    # Dataset scope limitation (will be relaxed/extended later if needed)
+    dataset = kwargs.get("dataset_name")
+    if dataset and dataset != "BPI_Challenge_2012":
+        raise NotImplementedError("specialised_lstm extended mode is restricted to BPI_Challenge_2012 in this benchmark.")
     return get_specialised(
         max_case_length=kwargs.get("max_case_length", 50),
         vocab_size=kwargs.get("vocab_size", 1000),
@@ -240,7 +250,7 @@ def specialised_lstm_factory(task: str, **kwargs):
         dropout_input=kwargs.get("dropout_input", 0.15),
         dropout_context=kwargs.get("dropout_context", 0.15),
         l2reg=kwargs.get("l2reg", 1e-4),
-        attribute_mode=kwargs.get("attribute_mode", "minimal"),
+        attribute_mode=attr_mode,
     )
 
 
@@ -249,6 +259,13 @@ def shared_lstm_factory(task: str, **kwargs):
     if task != "next_activity":
         raise NotImplementedError("shared_lstm supports only task='next_activity'")
     from .shared_lstm import get_next_activity_model as get_shared
+    # Enforce extended-only placeholder
+    attr_mode = kwargs.get("attribute_mode", "minimal")
+    if attr_mode != "extended":
+        raise NotImplementedError("shared_lstm is only available for attribute_mode='extended' (pending implementation). Use 'activity_only_lstm' for activities-only.")
+    dataset = kwargs.get("dataset_name")
+    if dataset and dataset != "BPI_Challenge_2012":
+        raise NotImplementedError("shared_lstm extended mode is restricted to BPI_Challenge_2012 in this benchmark.")
     return get_shared(
         max_case_length=kwargs.get("max_case_length", 50),
         vocab_size=kwargs.get("vocab_size", 1000),
@@ -259,7 +276,7 @@ def shared_lstm_factory(task: str, **kwargs):
         dropout_input=kwargs.get("dropout_input", 0.15),
         dropout_context=kwargs.get("dropout_context", 0.15),
         l2reg=kwargs.get("l2reg", 1e-4),
-        attribute_mode=kwargs.get("attribute_mode", "minimal"),
+        attribute_mode=attr_mode,
     )
 
 
@@ -275,5 +292,36 @@ model_registry.register_model(
     name="shared_lstm",
     framework="tensorflow",
     factory=shared_lstm_factory,
+    adapter=ProcessTransformerAdapter,
+)
+
+
+
+def activity_only_lstm_factory(task: str, **kwargs):
+    """Factory for activity_only_lstm (supports only next_activity, minimal)."""
+    if task != "next_activity":
+        raise NotImplementedError("activity_only_lstm supports only task='next_activity'")
+    attr_mode = kwargs.get("attribute_mode", "minimal")
+    if attr_mode != "minimal":
+        raise NotImplementedError("activity_only_lstm supports only attribute_mode='minimal'")
+    from .activity_only_lstm import get_next_activity_model as get_wick
+    return get_wick(
+        max_case_length=kwargs.get("max_case_length", 50),
+        vocab_size=kwargs.get("vocab_size", 1000),
+        output_dim=kwargs.get("output_dim", kwargs.get("vocab_size", 1000)),
+        embed_dim=kwargs.get("embed_dim", 64),
+        lstm_size_alpha=kwargs.get("lstm_size_alpha", 50),
+        lstm_size_beta=kwargs.get("lstm_size_beta", 50),
+        dropout_input=kwargs.get("dropout_input", 0.15),
+        dropout_context=kwargs.get("dropout_context", 0.15),
+        l2reg=kwargs.get("l2reg", 1e-4),
+        attribute_mode=attr_mode,
+    )
+
+
+model_registry.register_model(
+    name="activity_only_lstm",
+    framework="tensorflow",
+    factory=activity_only_lstm_factory,
     adapter=ProcessTransformerAdapter,
 )

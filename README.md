@@ -169,43 +169,6 @@ uv run python -m src.cli task=next_activity data.max_prefix_length=20 data.attri
 uv run python -m src.cli task=next_activity data.datasets="[Helpdesk,Tourism]"
 ```
 
-Config reference (excerpt)
-```yaml
-# Task selection
-task: next_activity  # next_activity | next_time | remaining_time | (multitask for mtlformer only)
-
-# Data configuration
-data:
-  path_raw: data/raw
-  path_processed: data/processed
-  end_of_case_token: "<eoc>"
-  max_prefix_length: null
-  attribute_mode: minimal  # minimal | extended
-  datasets: ["BPI_Challenge_2012", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"]
-
-# Model configuration
-model:
-  name: process_transformer # process_transformer | mtlformer | specialised_lstm | shared_lstm
-  hidden_size: 256
-  num_layers: 4
-  num_heads: 8
-  dropout_probability: 0.1
-
-# Training configuration
-train:
-  batch_size: 128
-  max_epochs: 10
-  learning_rate: 3e-4
-  accelerator: auto  # auto | cpu | gpu | mps
-  devices: 1
-
-# Cross-validation
-cv:
-  n_folds: 5
-  stratify: null
-  split_by_cases: true
-```
-
 ## Cross-Validation Protocol
 - Strict case-based splits; no case appears in both train and validation of a fold.
 - 5 folds persisted per dataset/task with a stable seed.
@@ -222,6 +185,7 @@ Not allowed
 - Changing splits, re-encoding vocab/labels, altering normalization/time units, filtering/augmenting data.
 
 Implemented models
+Experiment Run 1: attribute_mode=minimal (activities only)
 - process_transformer (TensorFlow)
 - mtlformer (TensorFlow)
 - specialised_lstm (TensorFlow; next_activity only)
@@ -303,3 +267,23 @@ pbpm_transformer_benchmark/
 ## License
 See LICENSE.txt for licensing information.
 
+
+
+## Full Benchmark: Minimal Mode (Activities-Only)
+Run the full minimal-mode experiment across all canonical datasets and models.
+
+Command
+```bash
+make run_benchmark_minimal_mode
+```
+What it does
+- Forces preprocessing for datasets: ["BPI_Challenge_2012", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"].
+- Trains/evaluates for 10 epochs with data.attribute_mode=minimal:
+  - ProcessTransformer on: next_activity, next_time, remaining_time
+  - MTLFormer on: multitask
+  - Specialised LSTM on: next_activity
+  - Shared LSTM on: next_activity
+
+Notes
+- Early stopping is enabled and configurable via train.early_stopping_* in configs/benchmark.yaml. Defaults: patience=3, min_delta=0.001, monitor=val_loss, mode=min, restore_best_weights=true. For Next-Activity you may set train.early_stopping_monitor=val_accuracy and train.early_stopping_mode=max. This keeps runs time-bounded while still allowing warmup/regularization.
+- Outputs are written under outputs/<dataset>/<task>/<model>/ with fold-level metrics.json and cv_results.json; a run-level environment snapshot is also updated at outputs/env.json.

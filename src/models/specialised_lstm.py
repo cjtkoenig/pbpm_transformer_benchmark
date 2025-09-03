@@ -1,5 +1,16 @@
 """
-Specialised LSTM with attention (activities-only variant).
+Specialised LSTM with attention (extended-mode placeholder).
+
+This module is reserved for the extended attribute mode (activities + roles + per-step time)
+for next-activity prediction on supported datasets (initially: BPI_Challenge_2012).
+
+Current status:
+- Only task='next_activity' will be supported.
+- Extended attribute_mode is required and not implemented yet. This file deliberately
+  raises NotImplementedError until the extended implementation is added.
+- The activities-only implementation has been factored out into
+  src/models/activity_only_lstm.py and registered as 'activity_only_lstm'.
+"
 
 This implementation adapts the "specialised" attention LSTM from:
 - https://github.com/ZhipengHe/Shared-and-Specialised-Attention-based-Interpretable-Models
@@ -105,45 +116,13 @@ def get_next_activity_model(
     l2reg: float = 1e-4,
     attribute_mode: str = "minimal",
 ) -> Model:
-    """Create the activities-only specialised LSTM model for next-activity.
+    """Specialised LSTM for next-activity (extended-mode only placeholder).
 
-    Parameters (kept close to original defaults where meaningful):
-    - embed_dim: size of the activity embedding (replaces "ac_weights" in the original)
-    - lstm_size_alpha/beta: hidden sizes for alpha/beta BiLSTMs
-    - dropout_input/context: dropouts mirroring original hyperparameters
-    - attribute_mode: reserved for future "extended" mode; currently unused here
-
-    Returns: tf.keras.Model with inputs [ac_tokens] and softmax outputs over output_dim classes.
+    Currently not implemented. This model will support only attribute_mode='extended' and only
+    for BPI_Challenge_2012 dataset in this benchmark. Use 'activity_only_lstm'
+    for activities-only runs (attribute_mode='minimal').
     """
-    # Input: integer activity tokens [B, T]
-    ac_input = layers.Input(shape=(max_case_length,), dtype="int32", name="ac_input")
-
-    # Activity embedding (trainable). In the original code, they could initialize
-    # with precomputed weights; here we keep a trainable embedding layer only.
-    ac_embs = layers.Embedding(
-        input_dim=vocab_size,
-        output_dim=embed_dim,
-        name="ac_embedding",
-    )(ac_input)  # [B, T, D]
-
-    x = layers.Dropout(dropout_input, name="dropout_input")(ac_embs)
-
-    # Specialised per-stream feature gating (single stream here)
-    gated = FeatureGate(hidden_beta=lstm_size_beta, l2reg=l2reg, name="feature_attention")(x)  # [B, T, D]
-
-    # Timestep attention (alpha) over the gated sequence
-    context, alpha = TimestepAttention(hidden_alpha=lstm_size_alpha, l2reg=l2reg)(gated)
-
-    # Context dropout (similar to original dropout_context)
-    context = layers.Dropout(dropout_context, name="context_dropout")(context)
-
-    # Classification head: softmax over next_activity classes
-    act_output = layers.Dense(
-        output_dim,
-        activation="softmax",
-        kernel_initializer="glorot_uniform",
-        name="act_output",
-    )(context)
-
-    model = Model(inputs=[ac_input], outputs=act_output, name="specialised_lstm_next_activity")
-    return model
+    if attribute_mode != "extended":
+        raise NotImplementedError(
+            "specialised_lstm is reserved for extended attribute mode. Please set data.attribute_mode='extended' and use 'activity_only_lstm' for activities-only.")
+    raise NotImplementedError("specialised_lstm extended-mode implementation is pending.")
