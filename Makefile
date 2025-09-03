@@ -199,33 +199,39 @@ analyze_all: dirs
 
 # ===== Smoke Tests =====
 
-# Split smoke tests into two fixed, non-variable targets as requested.
+# Split smoke tests into fixed, non-variable targets.
 # 1) process_transformer on its three tasks (next_activity, next_time, remaining_time)
 # 2) mtlformer on multitask
-# Each runs exactly 2 epochs on the three specified datasets.
+# 3) specialised_lstm (next_activity only)
+# 4) shared_lstm (next_activity only)
+# Each runs exactly 2 epochs on a small dataset for speed.
 
 .PHONY: smoke_test_minimal
 smoke_test_minimal: dirs
-		@echo "=== Smoke: process_transformer on Helpdesk (next_activity, 3 epochs) ==="; \
-	uv run python -m src.cli task=next_activity data.datasets="[\"Helpdesk\"]"; \
+	@echo "=== Smoke: process_transformer on Helpdesk (next_activity, 3 epochs) ==="; \
+	uv run python -m src.cli task=next_activity data.datasets="[\"Helpdesk\"]";
 
 .PHONY: smoke_test_process_transformer
 smoke_test_process_transformer: dirs
 	@echo "=== Smoke: process_transformer on Helpdesk (3 tasks, 2 epochs) ==="; \
 	uv run python -m src.cli model.name=process_transformer task=next_activity data.datasets="[\"Helpdesk\"]" train.max_epochs=2; \
 	uv run python -m src.cli model.name=process_transformer task=next_time data.datasets="[\"Helpdesk\"]" train.max_epochs=2; \
-	uv run python -m src.cli model.name=process_transformer task=remaining_time data.datasets="[\"Helpdesk\"]" train.max_epochs=2; \
-	echo "=== Smoke: process_transformer on Sepsis Cases - Event Log (3 tasks, 2 epochs) ==="; \
-	uv run python -m src.cli model.name=process_transformer task=next_activity data.datasets="[\"Sepsis Cases - Event Log\"]" train.max_epochs=2; \
-	uv run python -m src.cli model.name=process_transformer task=next_time data.datasets="[\"Sepsis Cases - Event Log\"]" train.max_epochs=2; \
-	uv run python -m src.cli model.name=process_transformer task=remaining_time data.datasets="[\"Sepsis Cases - Event Log\"]" train.max_epochs=2;
+	uv run python -m src.cli model.name=process_transformer task=remaining_time data.datasets="[\"Helpdesk\"]" train.max_epochs=2;
 
 .PHONY: smoke_test_mtlformer
 smoke_test_mtlformer: dirs
 	@echo "=== Smoke: mtlformer multitask on Helpdesk (2 epochs) ==="; \
-	uv run python -m src.cli model.name=mtlformer task=multitask data.datasets="[\"Helpdesk\"]" train.max_epochs=2; \
-	echo "=== Smoke: mtlformer multitask on Sepsis Cases - Event Log (2 epochs) ==="; \
-	uv run python -m src.cli model.name=mtlformer task=multitask data.datasets="[\"Sepsis Cases - Event Log\"]" train.max_epochs=2;
+	uv run python -m src.cli model.name=mtlformer task=multitask data.datasets="[\"Helpdesk\"]" train.max_epochs=2;
+
+.PHONY: smoke_test_specialised_lstm
+smoke_test_specialised_lstm: dirs
+	@echo "=== Smoke: specialised_lstm next_activity on Helpdesk (2 epochs) ==="; \
+	uv run python -m src.cli model.name=specialised_lstm task=next_activity data.datasets="[\"Helpdesk\"]" train.max_epochs=2;
+
+.PHONY: smoke_test_shared_lstm
+smoke_test_shared_lstm: dirs
+	@echo "=== Smoke: shared_lstm next_activity on Helpdesk (2 epochs) ==="; \
+	uv run python -m src.cli model.name=shared_lstm task=next_activity data.datasets="[\"Helpdesk\"]" train.max_epochs=2;
 
 # Helpers to list available items
 .PHONY: list_datasets list_tasks list_models
@@ -243,8 +249,10 @@ list_tasks:
 # Keep this list in sync with src/models/model_registry.py registrations
 list_models:
 	@echo "Registered models:" && \
-	echo "  - process_transformer" && \
-	echo "  - mtlformer"
+		echo "  - process_transformer" && \
+		echo "  - mtlformer" && \
+		echo "  - specialised_lstm" && \
+		echo "  - shared_lstm"
 
 # Basic test target (README mentions make test). Runs the CV sanity test.
 .PHONY: test

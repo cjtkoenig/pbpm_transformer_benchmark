@@ -7,6 +7,7 @@ Table of Contents
 - Quick Start
 - Installation and Environment
 - Datasets and Preprocessing
+- Smoke Tests
 - Running Tasks
 - Configuration (Hydra)
 - Cross-Validation Protocol
@@ -35,20 +36,14 @@ Prerequisites
 
 Fast path (recommended)
 ```bash
-# One-command onboarding: create venv, install minimal deps, run CV sanity test
+# One-command onboarding: create venv and install minimal deps
 make setup
 ```
 Notes
-- Minimal install includes pandas 2.3.x, numpy 1.26.x, scikit-learn >=1.4,<1.6, scipy 1.16.x — sufficient for test_cv.py and CV utilities.
+- Minimal install includes pandas 2.3.x, numpy 1.26.x, scikit-learn >=1.4,<1.6, scipy 1.16.x — sufficient for CLI and preprocessing utilities.
 - PyTorch (for PyTorch-based utilities) runs on Apple Silicon with MPS when train.accelerator=mps.
 - TensorFlow: prefer >= 2.20.0 on Python 3.11 (requirements.txt’s 2.15.1 pin may be incompatible in some environments).
 
-Run a quick CV sanity check
-```bash
-make test
-# Or
-uv run python test_cv.py
-```
 
 ## Installation and Environment
 
@@ -65,7 +60,6 @@ Minimal manual install (no Make)
 uv venv
 uv run python -m ensurepip --upgrade || true
 uv pip install pandas==2.3.1 numpy==1.26.4 "scikit-learn>=1.4,<1.6" scipy==1.16.1
-uv run python test_cv.py
 ```
 
 Environment notes
@@ -80,18 +74,56 @@ Environment notes
 
 Manage preprocessing
 ```bash
-# Inspect processed availability
+# Using Make (preferred)
+make preprocess_info
+make preprocess_force DATASETS="[\"Helpdesk\"]"
+make preprocess_clear                  # clears all processed datasets
+make preprocess_clear DATASET=Helpdesk # clears a single dataset
+
+# Or using uv directly
 uv run python -m src.cli preprocess_action=info
-
-# Force rebuild for specific datasets
 uv run python -m src.cli preprocess_action=force data.datasets="[Helpdesk]"
-
-# Force during task execution
-uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" force_preprocess=true
-
-# Clear processed cache
 uv run python -m src.cli preprocess_action=clear
 ```
+
+Note: You can also force preprocessing during a task run via Hydra override:
+`uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" force_preprocess=true`
+
+## Smoke Tests
+These quick commands verify that your environment, data pipeline, and CLI wiring are set up correctly. They are lightweight and should run within seconds to a couple of minutes depending on your machine.
+
+Preferred Make-based smoke tests
+```bash
+# Fast minimal smoke (next_activity on Helpdesk, uses defaults)
+make smoke_test_minimal
+
+# ProcessTransformer across its three tasks on Helpdesk (2 epochs each)
+make smoke_test_process_transformer
+
+# MTLFormer multitask on Helpdesk (2 epochs)
+make smoke_test_mtlformer
+```
+
+Alternative: direct uv CLI
+```bash
+# Minimal end-to-end run via Hydra CLI; adjust accelerator as needed
+uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" train.accelerator=cpu
+# On Apple Silicon with Metal (optional):
+uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" train.accelerator=mps
+```
+Notes: The first run will trigger preprocessing and write outputs/ and logs. TensorFlow >= 2.20.0 is recommended on Python 3.11 if training proceeds.
+
+Preprocessing pipeline smoke
+```bash
+# Using Make (preferred)
+make preprocess_info
+make preprocess_force DATASETS="[\"Helpdesk\"]"
+
+# Or using uv directly
+uv run python -m src.cli preprocess_action=info
+uv run python -m src.cli preprocess_action=force data.datasets="[Helpdesk]"
+```
+You should see summaries under data/processed and no errors. Use clear if you need a fresh state: `make preprocess_clear` or `uv run python -m src.cli preprocess_action=clear`.
 
 ## Running Tasks
 ```bash
@@ -149,11 +181,11 @@ data:
   end_of_case_token: "<eoc>"
   max_prefix_length: null
   attribute_mode: minimal  # minimal | extended
-  datasets: ["Helpdesk", "BPI_Challenge_2012", "Tourism"]
+  datasets: ["BPI_Challenge_2012", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"]
 
 # Model configuration
 model:
-  name: process_transformer # process_transformer | mtlformer 
+  name: process_transformer # process_transformer | mtlformer | specialised_lstm | shared_lstm
   hidden_size: 256
   num_layers: 4
   num_heads: 8
@@ -191,7 +223,9 @@ Not allowed
 
 Implemented models
 - process_transformer (TensorFlow)
-- mtlformer (TensorFlow) [optional; if present]
+- mtlformer (TensorFlow)
+- specialised_lstm (TensorFlow; next_activity only)
+- shared_lstm (TensorFlow; next_activity only)
 
 ## Metrics
 - Next Activity: Accuracy (primary), optionally F1.
@@ -216,10 +250,17 @@ make analyze_all
 
 ## Make Targets
 ```bash
-make setup             # one-command onboarding (minimal deps + CV test)
+make setup             # one-command onboarding (minimal deps)
 make install           # full dependency install
 make install_minimal   # minimal dependency install
-make test              # cross-validation sanity test
+
+# Smoke tests (quick checks; run on Helpdesk, 2-3 epochs)
+make smoke_test_minimal               # process_transformer next_activity on Helpdesk (3 epochs)
+make smoke_test_process_transformer   # process_transformer on 3 tasks (2 epochs each)
+make smoke_test_mtlformer             # mtlformer multitask (2 epochs)
+make smoke_test_specialised_lstm      # specialised_lstm next_activity (2 epochs)
+make smoke_test_shared_lstm           # shared_lstm next_activity (2 epochs)
+
 make analyze           # lightweight analysis summary
 make analyze_full TASK=next_activity  # full analysis for a task
 make analyze_all       # full analysis for all tasks

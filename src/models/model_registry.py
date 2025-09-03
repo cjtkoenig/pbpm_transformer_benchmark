@@ -201,6 +201,10 @@ class ModelRegistry:
             return ["next_activity", "next_time", "remaining_time"]
         elif model_name == "mtlformer":
             return ["multitask"]
+        elif model_name == "specialised_lstm":
+            return ["next_activity"]
+        elif model_name == "shared_lstm":
+            return ["next_activity"]
         else:
             return []
 
@@ -217,3 +221,59 @@ def create_model(name: str, task: str, **kwargs) -> Union[lightning.LightningMod
 def get_adapter(name: str, task: str) -> ModelAdapter:
     """Convenience function to get a model adapter."""
     return model_registry.get_adapter(name, task)
+
+
+# --- Registration for specialised_lstm and shared_lstm (activities-only variants) ---
+
+def specialised_lstm_factory(task: str, **kwargs):
+    """Factory for specialised_lstm (supports only next_activity)."""
+    if task != "next_activity":
+        raise NotImplementedError("specialised_lstm supports only task='next_activity'")
+    from .specialised_lstm import get_next_activity_model as get_specialised
+    return get_specialised(
+        max_case_length=kwargs.get("max_case_length", 50),
+        vocab_size=kwargs.get("vocab_size", 1000),
+        output_dim=kwargs.get("output_dim", kwargs.get("vocab_size", 1000)),
+        embed_dim=kwargs.get("embed_dim", 64),
+        lstm_size_alpha=kwargs.get("lstm_size_alpha", 50),
+        lstm_size_beta=kwargs.get("lstm_size_beta", 50),
+        dropout_input=kwargs.get("dropout_input", 0.15),
+        dropout_context=kwargs.get("dropout_context", 0.15),
+        l2reg=kwargs.get("l2reg", 1e-4),
+        attribute_mode=kwargs.get("attribute_mode", "minimal"),
+    )
+
+
+def shared_lstm_factory(task: str, **kwargs):
+    """Factory for shared_lstm (supports only next_activity)."""
+    if task != "next_activity":
+        raise NotImplementedError("shared_lstm supports only task='next_activity'")
+    from .shared_lstm import get_next_activity_model as get_shared
+    return get_shared(
+        max_case_length=kwargs.get("max_case_length", 50),
+        vocab_size=kwargs.get("vocab_size", 1000),
+        output_dim=kwargs.get("output_dim", kwargs.get("vocab_size", 1000)),
+        embed_dim=kwargs.get("embed_dim", 64),
+        lstm_size_alpha=kwargs.get("lstm_size_alpha", 50),
+        lstm_size_beta=kwargs.get("lstm_size_beta", 50),
+        dropout_input=kwargs.get("dropout_input", 0.15),
+        dropout_context=kwargs.get("dropout_context", 0.15),
+        l2reg=kwargs.get("l2reg", 1e-4),
+        attribute_mode=kwargs.get("attribute_mode", "minimal"),
+    )
+
+
+# Register with the global registry instance
+model_registry.register_model(
+    name="specialised_lstm",
+    framework="tensorflow",
+    factory=specialised_lstm_factory,
+    adapter=ProcessTransformerAdapter,
+)
+
+model_registry.register_model(
+    name="shared_lstm",
+    framework="tensorflow",
+    factory=shared_lstm_factory,
+    adapter=ProcessTransformerAdapter,
+)

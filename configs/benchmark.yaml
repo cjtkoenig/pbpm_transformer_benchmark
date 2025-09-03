@@ -14,7 +14,7 @@ data:
   end_of_case_token: "<eoc>"
   max_prefix_length: 50
   attribute_mode: minimal      # minimal | extended
-  datasets: ["BPI_Challenge_2012", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"]   # Referenzdatensätze + Tourismus
+  datasets: ["BPI_Challenge_2012", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"]
 
 model:
   name: process_transformer   # process_transformer | mtlformer
