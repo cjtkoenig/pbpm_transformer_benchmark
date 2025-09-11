@@ -89,6 +89,19 @@ uv run python -m src.cli preprocess_action=clear
 Note: You can also force preprocessing during a task run via Hydra override:
 `uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" force_preprocess=true`
 
+Dataset-specific attribute handling (extended mode)
+- Tourism: If column `event_log_activity_type` is present, it is treated as a categorical resource-like attribute by stringifying and normalizing tokens.
+- Road Traffic Fine: Prefer `vehicleClass` (4 categories). It is forward-filled per case to all events and used as the resource-like attribute. If `vehicleClass` is absent, we fall back to `org:resource`.
+  - Missing values are mapped to [UNK].
+  - If you processed this dataset before this change, re-run preprocessing with:
+    `uv run python -m src.cli preprocess_action=force data.datasets="[Road_Traffic_Fine_Management_Process]"`
+
+Missing values policy (all datasets)
+- Core identifiers: Rows with missing Case ID, Activity, or unparseable timestamps are dropped during standardization with a warning message. This avoids injecting the literal string "nan" into vocabularies or labels.
+- Activities: normalized to lowercase with spaces replaced by dashes. Missing activities are not allowed; affected events are removed before building prefixes and labels.
+- Resources (extended mode): Missing categorical values are mapped to [UNK]. We normalize after filling missing values to ensure NaNs are not turned into the string "nan". For Road Traffic Fine, `vehicleClass` is forward-filled per case before normalization.
+- Time features: Timestamps that cannot be parsed are dropped; delta-time sequences fill missing entries implicitly by construction (they are derived from valid timestamps only).
+
 ## Smoke Tests
 These quick commands verify that your environment, data pipeline, and CLI wiring are set up correctly. They are lightweight and should run within seconds to a couple of minutes depending on your machine.
 
@@ -278,7 +291,7 @@ make run_benchmark_minimal_mode
 ```
 What it does
 - Forces preprocessing for datasets: ["BPI_Challenge_2012", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"].
-- Trains/evaluates for 10 epochs with data.attribute_mode=minimal:
+- Trains/evaluates using config-defined epochs and per-model learning rates with data.attribute_mode=minimal:
   - ProcessTransformer on: next_activity, next_time, remaining_time
   - MTLFormer on: multitask
   - Specialised LSTM on: next_activity
@@ -287,3 +300,6 @@ What it does
 Notes
 - Early stopping is enabled and configurable via train.early_stopping_* in configs/benchmark.yaml. Defaults: patience=3, min_delta=0.001, monitor=val_loss, mode=min, restore_best_weights=true. For Next-Activity you may set train.early_stopping_monitor=val_accuracy and train.early_stopping_mode=max. This keeps runs time-bounded while still allowing warmup/regularization.
 - Outputs are written under outputs/<dataset>/<task>/<model>/ with fold-level metrics.json and cv_results.json; a run-level environment snapshot is also updated at outputs/env.json.
+
+
+

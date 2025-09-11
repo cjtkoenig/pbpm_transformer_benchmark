@@ -35,7 +35,8 @@ help:
 	echo "  test            Run CV sanity test (test_cv.py)"; \
 	echo "  preprocess_*    Inspect/force/clear processed data cache"; \
 	echo "  smoke_test      Run chosen MODEL across all datasets and tasks for 1 epoch (mtlformer adds multitask) (ACCELERATOR=cpu|mps|gpu)"; \
-	echo "  run_benchmark_minimal_mode  Force preprocess and run all models/tasks on minimal attributes for 10 epochs"; \
+	echo "  run_both_lstms  Run specialised_lstm and shared_lstm on all datasets (extended) for 15 epochs"; \
+	echo "  run_benchmark_minimal_mode  Force preprocess and run all models/tasks on minimal attributes (uses config-defined epochs and per-model LRs)"; \
 	echo "  clean_*         Clean caches, outputs, processed data";
 
 # Ensure standard folders exist
@@ -231,13 +232,13 @@ smoke_test_activity_only_lstm: dirs
 
 .PHONY: smoke_test_specialised_lstm
 smoke_test_specialised_lstm: dirs
-	@echo "=== Smoke: specialised_lstm next_activity on Helpdesk (2 epochs) ==="; \
-	uv run python -m src.cli model.name=specialised_lstm task=next_activity data.datasets="[\"Helpdesk\"]" train.max_epochs=2;
+	@echo "=== Smoke: specialised_lstm next_activity on Helpdesk (2 epochs, extended attrs) ==="; \
+	uv run python -m src.cli model.name=specialised_lstm task=next_activity data.datasets="[\"Helpdesk\"]" data.attribute_mode=extended train.max_epochs=2;
 
 .PHONY: smoke_test_shared_lstm
 smoke_test_shared_lstm: dirs
-	@echo "=== Smoke: shared_lstm next_activity on Helpdesk (2 epochs) ==="; \
-	uv run python -m src.cli model.name=shared_lstm task=next_activity data.datasets="[\"Helpdesk\"]" train.max_epochs=2;
+	@echo "=== Smoke: shared_lstm next_activity on Helpdesk (2 epochs, extended attrs) ==="; \
+	uv run python -m src.cli model.name=shared_lstm task=next_activity data.datasets="[\"Helpdesk\"]" data.attribute_mode=extended train.max_epochs=2;
 
 # Helpers to list available items
 .PHONY: list_datasets list_tasks list_models
@@ -277,16 +278,16 @@ run_benchmark_minimal_mode: dirs
 	UV="uv run python -m src.cli"; \
 	DATASETS="[\"BPI_Challenge_2012\", \"Helpdesk\", \"Road_Traffic_Fine_Management_Process\", \"Sepsis Cases - Event Log\", \"Tourism\"]"; \
 	$$UV preprocess_action=force data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
-	echo "Step 2/2: Train/Evaluate all models and tasks (10 epochs, attribute_mode=minimal)"; \
+	echo "Step 2/2: Train/Evaluate all models and tasks (using config-defined epochs and per-model learning rates, attribute_mode=minimal)"; \
 	echo "--- ProcessTransformer: next_activity ---"; \
-	$$UV model.name=process_transformer task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=1e-2 || exit $$?; \
+	$$UV model.name=process_transformer task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
 	echo "--- ProcessTransformer: next_time ---"; \
-	$$UV model.name=process_transformer task=next_time data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=1e-2 || exit $$?; \
+	$$UV model.name=process_transformer task=next_time data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
 	echo "--- ProcessTransformer: remaining_time ---"; \
-	$$UV model.name=process_transformer task=remaining_time data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=1e-2 || exit $$?; \
+	$$UV model.name=process_transformer task=remaining_time data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
 	echo "--- MTLFormer: multitask ---"; \
-	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=2e-3 || exit $$?; \
+	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
 	echo "--- Activity-Only LSTM: next_activity ---"; \
-	$$UV model.name=activity_only_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal train.max_epochs=10 train.learning_rate=1e-3 || exit $$?; \
+	$$UV model.name=activity_only_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
 	echo "=== Benchmark completed. Outputs written under outputs/ ==="; \
 	echo "Note: outputs/env.json is overwritten by each run; refer to per-model outputs under outputs/<dataset>/<task>/<model>/";

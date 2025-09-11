@@ -61,6 +61,26 @@ def main(config: DictConfig):
         print(f"\nAnalysis summary saved to {outputs_dir}/analysis/summary.json")
         print(json.dumps(report, indent=2))
         return
+    if hasattr(config, 'analysis') and getattr(config.analysis, 'action', None) == 'run_full_stats':
+        # Full statistical analysis: Plackett–Luce, Hierarchical Bayes, Friedman/Wilcoxon
+        from src.utils.statistical_analysis import _load_summary_or_collect, BenchmarkStatisticalAnalysis
+        # Determine task to analyze; default to config.task
+        task_to_analyze = str(getattr(config, 'task', 'next_activity'))
+        data = _load_summary_or_collect(outputs_dir)
+        datasets = sorted([d for d, tmap in data.items() if task_to_analyze in tmap])
+        models = sorted({m for d in datasets for m in data[d][task_to_analyze].keys()})
+        if not datasets or not models:
+            print(f"No data found for task {task_to_analyze} under {outputs_dir}")
+            return
+        results = {d: {task_to_analyze: data[d][task_to_analyze]} for d in datasets}
+        BA = BenchmarkStatisticalAnalysis(results, models, datasets)
+        report = BA.generate_comprehensive_report(task_to_analyze, include_plackett_luce=True, include_hierarchical_bayes=True)
+        out_dir = outputs_dir / "analysis"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"full_report_{task_to_analyze}.json"
+        out_path.write_text(json.dumps(report, indent=2))
+        print(f"\nFull statistical report saved to {out_path}")
+        return
 
     # Handle preprocessing management commands
     if hasattr(config, 'preprocess_action') and config.preprocess_action:
@@ -100,13 +120,6 @@ def main(config: DictConfig):
             raise ValueError(
                 "Invalid configuration: shared_lstm and specialised_lstm are reserved for extended attribute mode. "
                 "Please set data.attribute_mode=extended. For activities-only, use model.name=activity_only_lstm."
-            )
-        # Dataset restriction (temporary, per issue requirements)
-        ds = list(getattr(config.data, 'datasets', []))
-        if len(ds) != 1 or ds[0] != "BPI_Challenge_2012":
-            raise ValueError(
-                "Invalid configuration: shared_lstm and specialised_lstm (extended mode) are currently restricted to dataset 'BPI_Challenge_2012'. "
-                "Please set data.datasets=['BPI_Challenge_2012']."
             )
     
     # Route to appropriate task based on config

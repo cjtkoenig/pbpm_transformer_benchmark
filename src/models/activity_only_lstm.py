@@ -1,5 +1,6 @@
 """
-Wickramanayake Activities-Only LSTM (Shared/Specialised equivalent when only activities are present).
+Wickramanayake et al. (2022) Activities-Only LSTM (Shared/Specialised equivalent when only activities are present).
+https://github.com/ZhipengHe/Shared-and-Specialised-Attention-based-Interpretable-Models
 
 Rationale:
 - In the activities-only setup (attribute_mode == "minimal"), the Shared and Specialised
@@ -7,15 +8,9 @@ Rationale:
   a single feature-attention (beta) and a timestep-attention (alpha) over the activity
   embedding sequence. This module factors out that common implementation.
 
-Defaults match our shared activities-only configuration to keep comparability:
-- embed_dim = 64
-- lstm_size_alpha = 50, lstm_size_beta = 50 (BiLSTM, return_sequences=True)
-- dropout_input = 0.15, dropout_context = 0.15
-- l2reg = 1e-4
-
 Usage constraints:
 - Supports only task='next_activity'.
-- Designed for attribute_mode='minimal' (activities only). Extended mode is not implemented here.
+- Designed for attribute_mode='minimal' (activities only). Extended mode is not implemented here (see specialised/shared_lstm).
 """
 from typing import Tuple
 import tensorflow as tf

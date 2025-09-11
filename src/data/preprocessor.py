@@ -53,6 +53,12 @@ class CanonicalLogsProcessor:
                                "concept:name": "Activity", 
                                "time:timestamp": "Complete Timestamp"})
         
+        # Drop rows with missing core identifiers early to avoid injecting literal 'nan' tokens
+        before_core = len(df)
+        df = df.dropna(subset=["Case ID", "Activity"]).reset_index(drop=True)
+        if len(df) < before_core:
+            print(f"Warning: dropped {before_core - len(df)} rows with missing Case ID or Activity in '{self._name}'")
+        
         # Apply the same preprocessing as original ProcessTransformer
         df["Activity"] = df["Activity"].astype(str).str.lower()
         df["Activity"] = df["Activity"].str.replace(" ", "-", regex=False)
@@ -79,23 +85,55 @@ class CanonicalLogsProcessor:
         if sort_temporally:
             df.sort_values(by=["Complete Timestamp"], inplace=True)
         
+        # Dataset-specific attribute handling: Road Traffic Fine
+        # If 'vehicleClass' exists, forward-fill per case so it's available on all events.
+        if "vehicleClass" in df.columns and "Case ID" in df.columns:
+            try:
+                df["vehicleClass"] = (
+                    df.groupby("Case ID")["vehicleClass"].transform(lambda s: s.ffill().bfill())
+                )
+            except Exception:
+                # Be robust to unexpected types; leave as-is if transform fails
+                pass
+        
         return df
     
     def _extract_vocabularies(self, df: pd.DataFrame, eoc_token: str) -> Dict[str, Dict[str, int]]:
-        """Extract vocabularies for activities and create metadata.
+        """Extract vocabularies for activities (and resources if available), and create metadata.
         Adds End-of-Case token to both input and output vocabularies.
         """
-        keys = ["[PAD]", "[UNK]"]
+        # Activity vocab
+        ac_keys = ["[PAD]", "[UNK]"]
         activities = list(df["Activity"].unique())
-        # Ensure EOC is present in vocabularies
         if eoc_token not in activities:
             activities.append(eoc_token)
-        keys.extend(activities)
-        val = range(len(keys))
-
-        x_word_dict = dict(zip(keys, val))
+        ac_keys.extend(activities)
+        x_word_dict = dict(zip(ac_keys, range(len(ac_keys))))
         # y vocab does not need PAD/UNK, but must include EOC for next-activity labels
         y_word_dict = {act: idx for idx, act in enumerate(sorted(activities))}
+
+        # Resource vocab (optional): detect resource-like column
+        resource_col = None
+        for cand in ["vehicleClass", "org:group", "org:resource", "Resource", "role", "performer", "event_log_activity_type"]:
+            if cand in df.columns:
+                resource_col = cand
+                break
+        rl_word_dict = None
+        if resource_col is not None:
+            rl_keys = ["[PAD]", "[UNK]"]
+            # Normalize to string tokens
+            resources = (
+                df[resource_col]
+                .fillna("[UNK]")
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .str.replace(" ", "_", regex=False)
+                .tolist()
+            )
+            unique_resources = sorted(list(set(resources)))
+            rl_keys.extend(unique_resources)
+            rl_word_dict = dict(zip(rl_keys, range(len(rl_keys))))
 
         # Save metadata
         metadata = {
@@ -104,42 +142,94 @@ class CanonicalLogsProcessor:
             "vocab_size": len(x_word_dict),
             "num_activities": len(activities),
             "activities": activities,
-            "eoc_token": eoc_token
+            "eoc_token": eoc_token,
         }
+        if rl_word_dict is not None:
+            metadata.update({
+                "resource_word_dict": rl_word_dict,
+                "resource_vocab_size": len(rl_word_dict),
+                "resource_column": resource_col,
+            })
         
         with open(self._processed_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
         
-        return {"x_word_dict": x_word_dict, "y_word_dict": y_word_dict}
+        out = {"x_word_dict": x_word_dict, "y_word_dict": y_word_dict}
+        if rl_word_dict is not None:
+            out["resource_word_dict"] = rl_word_dict
+        return out
     
     def _process_next_activity(self, df: pd.DataFrame, eoc_token: str) -> pd.DataFrame:
         """Process data for next activity prediction task.
         Includes a final training example per case with next_act set to EOC.
-        Refactored to iterate over groups instead of repeatedly filtering the DataFrame.
+        Also emits extended attributes when available:
+        - resource_prefix: space-separated resource tokens aligned with activities
+        - delta_t_prefix: space-separated float hours since case start aligned with activities
         """
+        # Detect resource column once
+        resource_col = None
+        for cand in ["vehicleClass", "org:group", "org:resource", "Resource", "role", "performer", "event_log_activity_type"]:
+            if cand in df.columns:
+                resource_col = cand
+                break
         rows = []
         for case, group in df.groupby("Case ID", sort=False):
-            case_activities = group["Activity"].tolist()
+            g = group.sort_values("Complete Timestamp")
+            case_activities = g["Activity"].astype(str).tolist()
+            # Prepare optional extended streams
+            resources_seq = None
+            if resource_col is not None:
+                resources_seq = (
+                    g[resource_col]
+                    .fillna("[UNK]")
+                    .astype(str)
+                    .str.strip()
+                    .str.lower()
+                    .str.replace(" ", "_", regex=False)
+                    .tolist()
+                )
+            ts_list = pd.to_datetime(g["Complete Timestamp"]).tolist()
+            start_time = ts_list[0] if ts_list else None
+            delta_seq = None
+            if start_time is not None:
+                delta_seq = [float((t - start_time).total_seconds() / 3600.0) for t in ts_list]  # hours
             # Standard next steps
-            for i in range(len(case_activities) - 1):
+            L = len(case_activities)
+            for i in range(L - 1):
                 prefix = " ".join(case_activities[: i + 1])
                 next_act = case_activities[i + 1]
-                rows.append({
+                row = {
                     "case_id": case,
                     "prefix": prefix,
                     "k": i,
                     "next_act": next_act,
-                })
+                }
+                if resources_seq is not None:
+                    row["resource_prefix"] = " ".join(resources_seq[: i + 1])
+                if delta_seq is not None:
+                    row["delta_t_prefix"] = " ".join(str(x) for x in delta_seq[: i + 1])
+                rows.append(row)
             # Add final step predicting EOC
             if case_activities:
                 prefix = " ".join(case_activities)
-                rows.append({
+                row = {
                     "case_id": case,
                     "prefix": prefix,
                     "k": len(case_activities) - 1,
                     "next_act": eoc_token,
-                })
-        processed_df = pd.DataFrame(rows, columns=["case_id", "prefix", "k", "next_act"]).reset_index(drop=True)
+                }
+                if resources_seq is not None:
+                    row["resource_prefix"] = " ".join(resources_seq)
+                if delta_seq is not None:
+                    row["delta_t_prefix"] = " ".join(str(x) for x in delta_seq)
+                rows.append(row)
+        # Determine columns dynamically to avoid breaking minimal mode
+        cols = ["case_id", "prefix", "k", "next_act"]
+        if any("resource_prefix" in r for r in rows):
+            cols.append("resource_prefix")
+        if any("delta_t_prefix" in r for r in rows):
+            cols.append("delta_t_prefix")
+        processed_df = pd.DataFrame(rows)[cols].reset_index(drop=True)
         return processed_df
     
     def _process_next_time(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -191,7 +281,7 @@ class CanonicalLogsProcessor:
         return pd.DataFrame(rows, columns=["case_id", "prefix", "k", "remaining_time_days", "recent_time", "latest_time", "time_passed"]).reset_index(drop=True)
     
     
-    def process_dataset(self, random_state: int = 42, eoc_token: str = "<eoc>") -> Dict[str, Any]:
+    def process_dataset(self, random_state: int = 42, eoc_token: str = "<eoc>", force_rebuild_splits: bool = False) -> Dict[str, Any]:
         """
         Process the dataset and create canonical 5-fold case-based splits.
         
@@ -237,7 +327,7 @@ class CanonicalLogsProcessor:
         
         for task_name, task_df in tasks_data.items():
             print(f"\nCreating canonical splits for {task_name}...")
-            splits_info = cv.create_case_based_splits(task_df, self._name, self._dir_path, task_name)
+            splits_info = cv.create_case_based_splits(task_df, self._name, self._dir_path, task_name, force=bool(force_rebuild_splits))
             
             # Save task-specific metadata
             task_metadata = {
@@ -332,7 +422,11 @@ class SimplePreprocessor:
         
         # Process dataset with canonical splits
         eoc_token = self.config.get('data', {}).get('end_of_case_token', '<eoc>')
-        processing_info = processor.process_dataset(random_state=self.config.get('seed', 42), eoc_token=eoc_token)
+        processing_info = processor.process_dataset(
+            random_state=self.config.get('seed', 42),
+            eoc_token=eoc_token,
+            force_rebuild_splits=bool(force_reprocess)
+        )
         
         return processing_info
     

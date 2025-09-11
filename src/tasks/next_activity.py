@@ -48,6 +48,54 @@ class NextActivityTask:
         # Load all data for the task (we'll split by folds later)
         # For now, we'll load fold 0 to get the structure
         train_df, val_df = data_loader.load_fold_data("next_activity", 0)
+
+        # If we are in extended attribute mode with an extended-only model, ensure required columns exist;
+        # if missing, trigger a forced reprocess to rebuild splits with extended attributes and reload.
+        model_name = str(self.config.get("model", {}).get("name", ""))
+        attr_mode = str(self.config.get("data", {}).get("attribute_mode", "minimal"))
+        requires_extended = model_name in {"shared_lstm", "specialised_lstm"} and attr_mode == "extended"
+        if requires_extended:
+            missing_cols = [c for c in ["resource_prefix", "delta_t_prefix"] if c not in train_df.columns or c not in val_df.columns]
+            if missing_cols:
+                print(
+                    f"Detected missing extended columns {missing_cols} in existing splits for {dataset_name}. "
+                    "Forcing reprocessing to include extended attributes..."
+                )
+                # Force reprocess and reload
+                preprocessor.preprocess_dataset(dataset_name, force_reprocess=True)
+                data_loader = CanonicalLogsDataLoader(dataset_name, str(processed_directory))
+                train_df, val_df = data_loader.load_fold_data("next_activity", 0)
+                # Re-check and raise informative error if still missing
+                missing_cols = [c for c in ["resource_prefix", "delta_t_prefix"] if c not in train_df.columns or c not in val_df.columns]
+                if missing_cols:
+                    print(
+                        f"Warning: extended attribute columns still missing after reprocessing: {missing_cols}. "
+                        "Will attempt to augment existing splits during cross-validation."
+                    )
+                    # Try to build a full next_activity DataFrame with extended attributes for augmentation
+                    try:
+                        from ..data.preprocessor import CanonicalLogsProcessor
+                        import pandas as _pd
+                        raw_file = raw_directory / f"{dataset_name}.csv"
+                        # Decide column format
+                        header_cols = _pd.read_csv(raw_file, nrows=0).columns.tolist()
+                        if "Case ID" in header_cols:
+                            cols = ["Case ID", "Activity", "Complete Timestamp"]
+                        else:
+                            cols = ["case:concept:name", "concept:name", "time:timestamp"]
+                        proc = CanonicalLogsProcessor(
+                            name=dataset_name,
+                            filepath=str(raw_file),
+                            columns=cols,
+                            dir_path=str(processed_directory),
+                            pool=1,
+                        )
+                        df_std = proc._load_and_standardize_df(sort_temporally=False)
+                        eoc_token = self.config.get("data", {}).get("end_of_case_token", "<eoc>")
+                        combined_df = proc._process_next_activity(df_std, eoc_token=eoc_token)
+                    except Exception as _e:
+                        print(f"Warning: failed to build extended task frame for augmentation: {_e}")
+
         combined_df = pd.concat([train_df, val_df], ignore_index=True)
         
         # Get metadata
@@ -98,20 +146,30 @@ class NextActivityTask:
             num_heads=num_heads,
             ff_dim=ff_dim,
             attribute_mode=self.config.get("data", {}).get("attribute_mode", "minimal"),
+            processed_dir=str(self.config.get("data", {}).get("path_processed", "data/processed")),
         )
-        ds = self.config.get("data", {}).get("datasets")
-        if isinstance(ds, list) and len(ds) == 1:
-            kwargs["dataset_name"] = ds[0]
+        # Always pass dataset_name when available to allow model factories
+        # (e.g., shared/specialised LSTM) to read resource vocab size from metadata.
+        if getattr(self, "current_dataset", None):
+            kwargs["dataset_name"] = self.current_dataset
+        else:
+            ds = self.config.get("data", {}).get("datasets")
+            if isinstance(ds, list) and len(ds) == 1:
+                kwargs["dataset_name"] = ds[0]
         return create_model(**kwargs)
     
     def create_trainer(self, model, checkpoint_dir: Path = None):
         """Create training setup for both TensorFlow and PyTorch models."""
         if isinstance(model, keras.Model):
             # TensorFlow model
+            # Choose correct from_logits based on model's final activation
+            last_layer = model.layers[-1] if model.layers else None
+            activation_name = getattr(getattr(last_layer, 'activation', None), '__name__', None)
+            from_logits = (activation_name in (None, 'linear'))
             model.compile(
                 optimizer=keras.optimizers.Adam(learning_rate=self.config["train"]["learning_rate"]),
-                loss='sparse_categorical_crossentropy',
-                metrics=['accuracy']
+                loss=keras.losses.SparseCategoricalCrossentropy(from_logits=from_logits),
+                metrics=[keras.metrics.SparseCategoricalAccuracy(name="accuracy")]
             )
             # Attach TF early stopping params via config (used in fit callbacks)
             self._tf_early_stopping = keras.callbacks.EarlyStopping(
@@ -125,7 +183,7 @@ class NextActivityTask:
         else:
             # PyTorch Lightning model
             callbacks = []
-            
+
             if checkpoint_dir:
                 checkpoint_dir.mkdir(parents=True, exist_ok=True)
                 monitor = self.config["train"].get("early_stopping_monitor", 'val_loss')
@@ -215,8 +273,26 @@ class NextActivityTask:
         if isinstance(trainer, keras.Model):
             # TensorFlow training
             # Prepare data
-            x_train, y_train = self._prepare_tensorflow_data(train_df, max_case_length)
-            x_val, y_val = self._prepare_tensorflow_data(val_df, max_case_length)
+            model_name = self.config.get("model", {}).get("name", "")
+            if model_name in {"shared_lstm", "specialised_lstm"}:
+                from ..models.model_registry import get_adapter
+                adapter = get_adapter(model_name, "next_activity")
+                # Use adapter to convert canonical DF to model inputs
+                x_train, y_train = adapter.adapt_input({
+                    'df': train_df,
+                    'loader': loader,
+                    'max_case_length': max_case_length,
+                    'shuffle': True,
+                })
+                x_val, y_val = adapter.adapt_input({
+                    'df': val_df,
+                    'loader': loader,
+                    'max_case_length': max_case_length,
+                    'shuffle': False,
+                })
+            else:
+                x_train, y_train = self._prepare_tensorflow_data(train_df, max_case_length)
+                x_val, y_val = self._prepare_tensorflow_data(val_df, max_case_length)
             
             # Train
             callbacks = []

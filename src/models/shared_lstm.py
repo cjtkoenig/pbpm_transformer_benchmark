@@ -1,107 +1,112 @@
 """
-Shared LSTM with attention (extended-mode placeholder).
+Shared LSTM for extended attribute mode (next-activity task)
 
-This module is reserved for the extended attribute mode (activities + roles + per-step time)
-for next-activity prediction on supported datasets (initially: BPI_Challenge_2012).
-
-Current status:
-- Only task='next_activity' will be supported.
-- Extended attribute_mode is required and not implemented yet. This file deliberately
-  raises NotImplementedError until the extended implementation is added.
-- The activities-only implementation has been factored out into
-  src/models/activity_only_lstm.py and registered as 'activity_only_lstm'.
-"
-
-This adapts the "shared" attention LSTM from:
+Source inspiration:
+- Wickramanayake et al. (2022) Shared & Specialised LSTM
 - https://github.com/ZhipengHe/Shared-and-Specialised-Attention-based-Interpretable-Models
 
-Differences vs. the original code and rationale for this benchmark:
-- Canonical inputs: only activity token sequences [B, T] (no roles/per-step time yet).
-- Temporal order is kept (no reverse-time processing) to preserve comparability.
-- The original shared model concatenates multiple streams (ac/rl/time) and learns
-  a single shared beta (feature attention) and an alpha (timestep attention) over
-  that concatenated vector. Here we apply the same idea on the single activity
-  stream (embedding outputs) so we stay methodologically consistent.
+What changed vs the original pasted code?
+- We removed training loops, plotting, metrics, and file I/O from the model file.
+- This module now ONLY defines the Keras architecture function get_next_activity_model.
+- All data shaping (activities/resources/delta_t), padding, and vocabulary usage happen in the adapter
+  and loader to preserve the repository-wide canonical data pipeline and comparability.
 
-Prepared for extended mode:
-- The attention block is structured to later accept concatenated streams when
-  attribute_mode=extended is available (e.g., for BPI_Challenge_2012 only). The
-  activities-only path remains the default and comparable path.
+Why this design?
+- Benchmark-wide rule: models should be pure architectures; adapters handle inputs/outputs.
+- Keeps minimal-mode models untouched and avoids duplicate preprocessing logic in each model file.
+- Makes cross-validation, metrics, and logging uniform across models.
+
+How to use this model now
+- Do NOT call this directly in scripts. Use the registry and adapter via the CLI:
+  uv run python -m src.cli task=next_activity model.name=shared_lstm \
+    data.attribute_mode=extended data.datasets="[Helpdesk]"
+- The registry builds the Keras model from here and the SharedLSTMAdapter provides input tensors:
+  [ac_input, rl_input, t_input] aligned along time, with shapes:
+    ac_input: [B, T] int32 activity tokens
+    rl_input: [B, T] int32 resource tokens
+    t_input:  [B, T, 1] float32 delta hours since case start
+
+Minimal vs Extended
+- Minimal (activities only): use model.name=activity_only_lstm
+- Extended (activities, resource/group, delta time): use model.name=shared_lstm (this module)
+
+Implementation notes
+- The model applies timestep-attention (alpha) and feature-attention (beta) over the concatenated
+  streams (activity embedding, resource embedding, delta_t). Context is a weighted sum over time and
+  features, followed by a dense softmax head over next-activity classes.
+- Data preparation moved to src/data/loader.py (prepare_next_activity_extended_data).
+- Model selection/creation moved to src/models/model_registry.py (shared_lstm_factory) and
+  SharedLSTMAdapter, which takes DataFrames and outputs tensors for Keras .fit().
 """
-from typing import Tuple
+import os
+import numpy as np
 import tensorflow as tf
-from tensorflow.keras import layers, Model, regularizers
+from tensorflow.keras import layers, backend, Model, callbacks
+from tensorflow.keras.regularizers import l2
 
 
-class TimestepAndFeatureAttention(layers.Layer):
-    """Shared attention combining per-timestep (alpha) and per-feature (beta) weights.
-
-    On a single stream (activities only):
-    - beta: BiLSTM -> TimeDistributed(Dense(D, tanh)) produces per-timestep feature gates.
-    - alpha: BiLSTM -> TimeDistributed(Dense(1)) -> softmax over time produces timestep weights.
-    - context: sum_t (alpha_t * beta_t * x_t).
-
-    This mirrors the original shared model's computation but over one stream.
-    """
-    def __init__(self, hidden_alpha: int = 50, hidden_beta: int = 50, l2reg: float = 1e-4, dropout: float = 0.0, name: str = "shared_attention", **kwargs):
-        super().__init__(name=name, **kwargs)
-        # Beta branch (feature attention)
-        self.beta_lstm = layers.Bidirectional(layers.LSTM(hidden_beta, return_sequences=True), name="beta")
-        self.beta_dense = layers.TimeDistributed(
-            layers.Dense(units=None, activation="tanh", kernel_regularizer=regularizers.l2(l2reg)),
-            name="feature_attention",
-        )
-        # Alpha branch (timestep attention)
-        self.alpha_lstm = layers.Bidirectional(layers.LSTM(hidden_alpha, return_sequences=True), name="alpha")
-        self.alpha_dense = layers.TimeDistributed(
-            layers.Dense(1, kernel_regularizer=regularizers.l2(l2reg)), name="alpha_dense"
-        )
-        self.softmax_time = layers.Softmax(axis=1)
-        self.dropout = layers.Dropout(dropout)
-
-    def build(self, input_shape):
-        # input_shape: (B, T, D)
-        d = int(input_shape[-1])
-        # Set dense units to D so beta has same feature dimension as embeddings
-        self.beta_dense.layer.units = d
-        super().build(input_shape)
-
-    def call(self, x: tf.Tensor, training=None) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-        # x: [B, T, D]
-        # Shared beta over the same input stream
-        b = self.beta_lstm(x, training=training)             # [B, T, H']
-        beta = self.beta_dense(b, training=training)         # [B, T, D]
-        # Timestep alpha over the same input stream
-        a = self.alpha_lstm(x, training=training)            # [B, T, H']
-        e = self.alpha_dense(a, training=training)           # [B, T, 1]
-        alpha = self.softmax_time(e)                         # [B, T, 1]
-        # Optional dropout on input stream (like original dropout before attention)
-        x = self.dropout(x, training=training)
-        # Combine attentions and inputs
-        c_t = alpha * beta * x                               # [B, T, D]
-        context = tf.reduce_sum(c_t, axis=1)                 # [B, D]
-        return context, alpha, beta
-
+# New canonical API-compatible builder
 
 def get_next_activity_model(
     max_case_length: int,
-    vocab_size: int,
+    ac_vocab_size: int,
+    rl_vocab_size: int,
     output_dim: int,
-    embed_dim: int = 64,
+    embed_dim_ac: int = 64,
+    embed_dim_rl: int = 64,
     lstm_size_alpha: int = 50,
     lstm_size_beta: int = 50,
     dropout_input: float = 0.15,
     dropout_context: float = 0.15,
     l2reg: float = 1e-4,
-    attribute_mode: str = "minimal",
 ) -> Model:
-    """Shared LSTM for next-activity (extended-mode only placeholder).
+    """Create the Shared LSTM model for next-activity (extended attribute mode).
 
-    Currently not implemented. This model will support only attribute_mode='extended' and only
-    for BPI_Challenge_2012 dataset in this benchmark. Use 'activity_only_lstm'
-    for activities-only runs (attribute_mode='minimal').
+    Inputs:
+      - ac_input: [B, T] integer activity tokens
+      - rl_input: [B, T] integer resource tokens
+      - t_input:  [B, T, 1] float delta time since case start (hours)
+    Output:
+      - softmax over next activity classes (output_dim)
     """
-    if attribute_mode != "extended":
-        raise NotImplementedError(
-            "shared_lstm is reserved for extended attribute mode. Please set data.attribute_mode='extended' and use 'activity_only_lstm' for activities-only.")
-    raise NotImplementedError("shared_lstm extended-mode implementation is pending.")
+    # Inputs
+    ac_input = layers.Input(shape=(max_case_length,), dtype="int32", name="ac_input")
+    rl_input = layers.Input(shape=(max_case_length,), dtype="int32", name="rl_input")
+    t_input = layers.Input(shape=(max_case_length, 1), dtype="float32", name="t_input")
+
+    # Embeddings
+    ac_embs = layers.Embedding(input_dim=ac_vocab_size, output_dim=embed_dim_ac, name="ac_embedding")(ac_input)
+    rl_embs = layers.Embedding(input_dim=rl_vocab_size, output_dim=embed_dim_rl, name="rl_embedding")(rl_input)
+
+    # Concatenate streams: [B, T, D_ac + D_rl + 1]
+    full_embs = layers.Concatenate(name="full_embs")( [ac_embs, rl_embs, t_input] )
+    full_embs = layers.Dropout(dropout_input, name="input_dropout")(full_embs)
+
+    dim_total = int(embed_dim_ac + embed_dim_rl + 1)
+
+    # Attention LSTMs
+    alpha_bi = layers.Bidirectional(layers.LSTM(lstm_size_alpha, return_sequences=True), name="alpha")
+    beta_bi = layers.Bidirectional(layers.LSTM(lstm_size_beta, return_sequences=True), name="beta")
+
+    # Dense layers for attentions
+    alpha_dense = layers.TimeDistributed(layers.Dense(1, kernel_regularizer=l2(l2reg)), name="alpha_dense")
+    beta_dense = layers.TimeDistributed(layers.Dense(dim_total, activation="tanh", kernel_regularizer=l2(l2reg)), name="feature_attention")
+
+    # Compute attentions
+    a = alpha_bi(full_embs)
+    e = alpha_dense(a)
+    alpha = layers.Softmax(axis=1, name="timestep_attention")(e)  # [B, T, 1]
+
+    b = beta_bi(full_embs)
+    beta = beta_dense(b)  # [B, T, D]
+
+    # Context: sum over time of alpha_t * beta_t * full_embs_t
+    c_t = layers.Multiply(name="feature_importance")([alpha, beta, full_embs])
+    context = layers.Lambda(lambda x: backend.sum(x, axis=1), name="context_sum")(c_t)  # [B, D]
+    context = layers.Dropout(dropout_context, name="context_dropout")(context)
+
+    # Prediction head
+    out = layers.Dense(output_dim, activation="softmax", kernel_initializer="glorot_uniform", name="act_output")(context)
+
+    model = Model(inputs=[ac_input, rl_input, t_input], outputs=out, name="shared_lstm_next_activity")
+    return model

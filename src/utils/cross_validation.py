@@ -32,7 +32,7 @@ class CanonicalCrossValidation:
         self.random_state = random_state
         
     def create_case_based_splits(self, df: pd.DataFrame, dataset_name: str, 
-                                processed_dir: Path, task_name: Optional[str] = None) -> Dict[str, Any]:
+                                processed_dir: Path, task_name: Optional[str] = None, force: bool = False) -> Dict[str, Any]:
         """
         Create and persist canonical 5-fold case-based splits.
         
@@ -63,9 +63,16 @@ class CanonicalCrossValidation:
         splits_dir.mkdir(parents=True, exist_ok=True)
         
         # Check if splits already exist and are valid
-        if self._splits_exist_and_valid(splits_dir, case_ids, task_name):
+        if not force and self._splits_exist_and_valid(splits_dir, case_ids, task_name):
             print(f"Using existing canonical splits for {dataset_name}")
-            return self._load_splits_metadata(splits_dir, task_name)
+            # Even if splits exist, we may need to augment CSVs with newly available optional columns
+            splits_metadata = self._load_splits_metadata(splits_dir, task_name)
+            try:
+                self._augment_split_files_if_needed(df, splits_dir, task_name, splits_metadata)
+            except Exception as e:
+                # Do not fail the run if augmentation fails; keep existing splits
+                print(f"Warning: failed to augment existing splits with new columns: {e}")
+            return splits_metadata
         
         # Create new splits
         print(f"Creating new canonical splits for {dataset_name}")
@@ -204,7 +211,55 @@ class CanonicalCrossValidation:
         
         with open(metadata_file, 'r') as f:
             return json.load(f)
-    
+
+    def _augment_split_files_if_needed(self, task_df: pd.DataFrame, splits_dir: Path, task_name: Optional[str], splits_metadata: Dict[str, Any]) -> None:
+        """Augment existing split CSVs with newly available optional columns without changing case assignments.
+        Currently supports next_activity extended attributes: resource_prefix and delta_t_prefix.
+        """
+        if task_name != "next_activity":
+            return
+        if task_df is None or task_df.empty:
+            return
+        desired_cols = set(task_df.columns)
+        extended_cols = [c for c in ["resource_prefix", "delta_t_prefix"] if c in desired_cols]
+        if not extended_cols:
+            return
+        # Check whether existing split files already contain these columns
+        any_missing = False
+        for fold_idx in range(self.n_folds):
+            fold_dir = splits_dir / f"fold_{fold_idx}"
+            train_path = fold_dir / "train.csv"
+            if not train_path.exists():
+                continue
+            try:
+                existing_cols = set(pd.read_csv(train_path, nrows=0).columns)
+            except Exception:
+                continue
+            for c in extended_cols:
+                if c not in existing_cols:
+                    any_missing = True
+                    break
+            if any_missing:
+                break
+        if not any_missing:
+            return
+        print(f"Augmenting existing canonical splits to include extended columns: {extended_cols}")
+        # Reconstruct per-fold files using stored case assignments in splits_metadata
+        folds_meta = (splits_metadata or {}).get("folds", {})
+        for fold_name, fold_info in folds_meta.items():
+            try:
+                fold_idx = int(str(fold_name).split("_")[-1])
+            except Exception:
+                continue
+            train_cases = set(fold_info.get("train_case_ids", []) or [])
+            val_cases = set(fold_info.get("val_case_ids", []) or [])
+            train_df = task_df[task_df["case_id"].isin(train_cases)].copy()
+            val_df = task_df[task_df["case_id"].isin(val_cases)].copy()
+            fold_dir = splits_dir / f"fold_{fold_idx}"
+            fold_dir.mkdir(exist_ok=True)
+            train_df.to_csv(fold_dir / "train.csv", index=False)
+            val_df.to_csv(fold_dir / "val.csv", index=False)
+
     def _hash_case_ids(self, case_ids: np.ndarray) -> str:
         """Create hash of case IDs for validation."""
         sorted_ids = sorted(case_ids)

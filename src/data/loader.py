@@ -21,17 +21,19 @@ class CanonicalLogsDataLoader:
     and ensures consistent data loading across all models and experiments.
     """
     
-    def __init__(self, name: str, dir_path: str = "./data/processed"):
+    def __init__(self, name: str, dir_path: str = "./data/processed", allow_runtime_resource_vocab: bool = False):
         """Initialize canonical logs data loader.
         
         Args:
             name: Dataset name
             dir_path: Path to processed data directory
+            allow_runtime_resource_vocab: If True, derive resource vocab by scanning split CSVs when metadata lacks it.
         """
         self._name = name
         self._dir_path = Path(dir_path)
         self._processed_dir = self._dir_path / name / "processed"
         self._splits_dir = self._dir_path / name / "splits"
+        self._allow_runtime_resource_vocab = bool(allow_runtime_resource_vocab)
         
         # Load metadata
         self._load_metadata()
@@ -49,6 +51,39 @@ class CanonicalLogsDataLoader:
         self.y_word_dict = self.metadata["y_word_dict"]
         self.vocab_size = self.metadata["vocab_size"]
         self.num_activities = self.metadata["num_activities"]
+        # Optional resource vocab for extended attribute mode
+        self.rl_word_dict = self.metadata.get("resource_word_dict", None)
+        self.rl_vocab_size = int(self.metadata.get("resource_vocab_size", 0) or 0)
+        self.resource_column = self.metadata.get("resource_column", None)
+
+        # Fallback: derive resource vocabulary at runtime by scanning split CSVs
+        if (self.rl_word_dict is None or self.rl_vocab_size <= 0) and self._allow_runtime_resource_vocab:
+            try:
+                tokens = set()
+                task_dir = self._splits_dir / "next_activity"
+                if task_dir.exists():
+                    for fold_dir in sorted(task_dir.glob("fold_*")):
+                        for split_file in [fold_dir / "train.csv", fold_dir / "val.csv"]:
+                            if split_file.exists():
+                                try:
+                                    df = pd.read_csv(split_file, usecols=["resource_prefix"])  # only load needed column
+                                    if "resource_prefix" in df.columns:
+                                        for s in df["resource_prefix"].dropna().astype(str).values:
+                                            for tok in str(s).split():
+                                                tokens.add(tok)
+                                except ValueError:
+                                    # Column not present; skip
+                                    pass
+                if tokens:
+                    # Ensure special tokens
+                    tokens.update({"[PAD]", "[UNK]"})
+                    sorted_tokens = sorted(tokens)
+                    self.rl_word_dict = {tok: idx for idx, tok in enumerate(sorted_tokens)}
+                    self.rl_vocab_size = int(len(self.rl_word_dict))
+            except Exception as e:
+                # Leave as None on failure
+                self.rl_word_dict = self.rl_word_dict
+                self.rl_vocab_size = int(self.rl_vocab_size or 0)
     
     def load_fold_data(self, task: str, fold_idx: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -101,8 +136,8 @@ class CanonicalLogsDataLoader:
         return max_length
     
     def prepare_next_activity_data(self, df: pd.DataFrame, 
-                                  max_case_length: int, 
-                                  shuffle: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+                                   max_case_length: int, 
+                                   shuffle: bool = True) -> Tuple[np.ndarray, np.ndarray]:
         """Prepare data for next activity prediction task."""
         x = df["prefix"].values
         y = df["next_act"].values
@@ -114,20 +149,68 @@ class CanonicalLogsDataLoader:
         token_x = []
         for _x in x:
             token_x.append([self.x_word_dict[s] for s in _x.split()])
-
+        
         # Tokenize labels
         token_y = []
         for _y in y:
             token_y.append(self.y_word_dict[_y])
-
+        
         # Pad sequences
         token_x = tf.keras.preprocessing.sequence.pad_sequences(
             token_x, maxlen=max_case_length, padding='post', truncating='post')
-
+        
         token_x = np.array(token_x, dtype=np.int32)
         token_y = np.array(token_y, dtype=np.int32)
 
         return token_x, token_y
+
+    def prepare_next_activity_extended_data(self, df: pd.DataFrame,
+                                            max_case_length: int,
+                                            shuffle: bool = True) -> Tuple[Tuple[np.ndarray, np.ndarray, np.ndarray], np.ndarray]:
+        """Prepare extended-mode data for next-activity: activities, resources, and delta time since case start.
+        Returns ( [ac_x, rl_x, time_x], y ).
+        """
+        if self.rl_word_dict is None:
+            raise ValueError("Extended data requested but resource vocabulary not available in metadata. Re-preprocess dataset or ensure resource column present.")
+        required_cols = ["prefix", "next_act", "resource_prefix", "delta_t_prefix"]
+        for col in required_cols:
+            if col not in df.columns:
+                raise ValueError(f"Extended data requires column '{col}' in split CSV. Please reprocess dataset to include extended attributes.")
+        x_ac = df["prefix"].values
+        x_rl = df["resource_prefix"].values
+        x_dt = df["delta_t_prefix"].values
+        y = df["next_act"].values
+        if shuffle:
+            x_ac, x_rl, x_dt, y = utils.shuffle(x_ac, x_rl, x_dt, y)
+        # Tokenize sequences
+        tok_ac = []
+        tok_rl = []
+        tok_dt = []
+        for sa, sr, sd in zip(x_ac, x_rl, x_dt):
+            tok_ac.append([self.x_word_dict.get(s, self.x_word_dict.get("[UNK]", 1)) for s in sa.split()])
+            tok_rl.append([self.rl_word_dict.get(s, self.rl_word_dict.get("[UNK]", 1)) for s in sr.split()])
+            # parse floats for delta time
+            try:
+                dt_vals = [float(x) for x in sd.split()]
+            except Exception:
+                dt_vals = []
+                for x in sd.split():
+                    try:
+                        dt_vals.append(float(x))
+                    except Exception:
+                        dt_vals.append(0.0)
+            tok_dt.append(dt_vals)
+        # Tokenize labels
+        tok_y = [self.y_word_dict[_y] for _y in y]
+        # Pad sequences
+        pad_ac = tf.keras.preprocessing.sequence.pad_sequences(tok_ac, maxlen=max_case_length, padding='post', truncating='post', value=self.x_word_dict.get("[PAD]", 0))
+        pad_rl = tf.keras.preprocessing.sequence.pad_sequences(tok_rl, maxlen=max_case_length, padding='post', truncating='post', value=self.rl_word_dict.get("[PAD]", 0))
+        pad_dt = tf.keras.preprocessing.sequence.pad_sequences(tok_dt, maxlen=max_case_length, padding='post', truncating='post', value=0.0, dtype='float32')
+        pad_dt = np.expand_dims(np.array(pad_dt, dtype=np.float32), axis=-1)  # [B, T, 1]
+        pad_ac = np.array(pad_ac, dtype=np.int32)
+        pad_rl = np.array(pad_rl, dtype=np.int32)
+        tok_y = np.array(tok_y, dtype=np.int32)
+        return (pad_ac, pad_rl, pad_dt), tok_y
     
     def prepare_next_time_data(self, df: pd.DataFrame, 
                               max_case_length: int,
