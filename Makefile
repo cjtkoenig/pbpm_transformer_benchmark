@@ -35,7 +35,7 @@ help:
 	echo "  test            Run CV sanity test (test_cv.py)"; \
 	echo "  preprocess_*    Inspect/force/clear processed data cache"; \
 	echo "  smoke_test      Run chosen MODEL across all datasets and tasks for 1 epoch (mtlformer adds multitask) (ACCELERATOR=cpu|mps|gpu)"; \
-	echo "  run_both_lstms  Run specialised_lstm and shared_lstm on all datasets (extended) for 15 epochs"; \
+	echo "  run_both_lstms  Run specialised_lstm and shared_lstm on all datasets (extended) for 1 epoch each"; \
 	echo "  run_benchmark_minimal_mode  Force preprocess and run all models/tasks on minimal attributes (uses config-defined epochs and per-model LRs)"; \
 	echo "  clean_*         Clean caches, outputs, processed data";
 
@@ -291,3 +291,24 @@ run_benchmark_minimal_mode: dirs
 	$$UV model.name=activity_only_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
 	echo "=== Benchmark completed. Outputs written under outputs/ ==="; \
 	echo "Note: outputs/env.json is overwritten by each run; refer to per-model outputs under outputs/<dataset>/<task>/<model>/";
+
+# ===== Extended Attributes: LSTMs on all datasets for 1 epoch =====
+.PHONY: run_both_lstms
+run_both_lstms: dirs
+	@echo "=== Extended attributes: specialised_lstm and shared_lstm over all datasets (1 epoch each) ==="; \
+	UV="uv run python -m src.cli"; \
+	DATASETS="[\"BPI_Challenge_2012\", \"Helpdesk\", \"Road_Traffic_Fine_Management_Process\", \"Sepsis Cases - Event Log\", \"Tourism\"]"; \
+	echo "--- specialised_lstm (next_activity, extended) ---"; \
+	$$UV model.name=specialised_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=extended train.max_epochs=1 || exit $$?; \
+	echo "--- shared_lstm (next_activity, extended) ---"; \
+	$$UV model.name=shared_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=extended train.max_epochs=1 || exit $$?;
+
+.PHONY: thesis_report
+thesis_report: dirs
+	@echo "Generating thesis-aligned report (within-track rankings and uplift)..."; \
+	if [ -z "$(TASK)" ]; then \
+		uv run python -m src.cli analysis.action=thesis_report; \
+	else \
+		echo "Task specified: $(TASK)"; \
+		uv run python -m src.cli analysis.action=thesis_report analysis.task=$(TASK); \
+	fi

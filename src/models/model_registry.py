@@ -143,7 +143,15 @@ class ModelRegistry:
         return adapter_class(task)
     
     def _create_process_transformer(self, task: str, **kwargs) -> keras.Model:
-        """Create Process Transformer model for PBPM tasks."""
+        """Create Process Transformer model for PBPM tasks.
+        Restricted to minimal attribute mode by design for this benchmark.
+        """
+        # Enforce minimal attribute mode
+        attr_mode = kwargs.get("attribute_mode", "minimal")
+        if attr_mode != "minimal":
+            raise NotImplementedError(
+                "process_transformer supports only data.attribute_mode='minimal' in this benchmark."
+            )
         max_case_length = kwargs.get("max_case_length", 50)
         vocab_size = kwargs.get("vocab_size", 1000)
         embed_dim = kwargs.get("embed_dim", 36)
@@ -194,10 +202,16 @@ class ModelRegistry:
     
     def _create_mtlformer(self, task: str, **kwargs) -> keras.Model:
         """Create MTLFormer model.
-        In this benchmark setup, MTLFormer is only allowed for task='multitask'.
+        In this benchmark setup, MTLFormer is only allowed for task='multitask' and minimal attribute mode.
         """
         if task != "multitask":
             raise NotImplementedError("MTLFormer in this benchmark only supports task='multitask'. Run the MultiTaskLearningTask and compare per-task reports.")
+        # Enforce minimal attribute mode for MTLFormer
+        attr_mode = kwargs.get("attribute_mode", "minimal")
+        if attr_mode != "minimal":
+            raise NotImplementedError(
+                "mtlformer supports only data.attribute_mode='minimal' in this benchmark."
+            )
         max_case_length = kwargs.get("max_case_length", 50)
         vocab_size = kwargs.get("vocab_size", 1000)
         embed_dim = kwargs.get("embed_dim", 36)

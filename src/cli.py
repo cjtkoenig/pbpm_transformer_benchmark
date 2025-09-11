@@ -81,6 +81,17 @@ def main(config: DictConfig):
         out_path.write_text(json.dumps(report, indent=2))
         print(f"\nFull statistical report saved to {out_path}")
         return
+    if hasattr(config, 'analysis') and getattr(config.analysis, 'action', None) == 'thesis_report':
+        # Thesis-aligned report: within-track comparisons, uplift for extended
+        from src.utils.statistical_analysis import generate_thesis_report
+        task_to_analyze = str(getattr(getattr(config, 'analysis', {}), 'task', 'all'))
+        rep = generate_thesis_report(outputs_dir, task=task_to_analyze)
+        out_dir = outputs_dir / "analysis"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / ("thesis_report.json" if task_to_analyze == 'all' else f"thesis_report_{task_to_analyze}.json")
+        out_path.write_text(json.dumps(rep, indent=2))
+        print(f"\nThesis-aligned report saved to {out_path}")
+        return
 
     # Handle preprocessing management commands
     if hasattr(config, 'preprocess_action') and config.preprocess_action:
@@ -101,6 +112,13 @@ def main(config: DictConfig):
             "Invalid configuration: process_transformer does not support task=multitask. "
             "Please choose one of: next_activity, next_time, remaining_time"
         )
+    # Enforce minimal attribute mode for ProcessTransformer and MTLFormer
+    if model_name in {"process_transformer", "mtlformer"}:
+        attr_mode = str(getattr(config.data, 'attribute_mode', 'minimal'))
+        if attr_mode != 'minimal':
+            raise ValueError(
+                "Invalid configuration: process_transformer and mtlformer only support data.attribute_mode=minimal in this benchmark."
+            )
     if model_name == "activity_only_lstm":
         if task_name != "next_activity":
             raise ValueError(
@@ -174,6 +192,14 @@ def main(config: DictConfig):
     except Exception:
         tf_version = None
     import sys, platform
+    # Determine track
+    _model = str(config.model.name)
+    if _model in {"process_transformer", "mtlformer", "activity_only_lstm"}:
+        track = "minimal"
+    elif _model in {"shared_lstm", "specialised_lstm", "pgtnet"}:
+        track = "extended"
+    else:
+        track = None
     env_info = {
         "python": sys.version.split()[0],
         "platform": platform.platform(),
@@ -186,6 +212,8 @@ def main(config: DictConfig):
         "seed": int(config.seed),
         "task": config.task,
         "model": config.model.name,
+        "data_attribute_mode": getattr(config.data, 'attribute_mode', None),
+        "track": track,
     }
     (outputs_dir / "env.json").write_text(json.dumps(env_info, indent=2))
     print(f"\nEnvironment info saved to outputs/env.json")

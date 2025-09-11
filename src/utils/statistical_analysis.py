@@ -779,6 +779,239 @@ def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str,
     return results
 
 
+def _collect_fold_scores(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str, List[float]]]]:
+    """Collect per-fold scores for each dataset/task/model.
+    Returns {dataset: {task: {model: [fold_scores...]}}}
+    Uses accuracy for next_activity; MAE for time tasks (kept as-is, lower is better).
+    """
+    data: Dict[str, Dict[str, Dict[str, List[float]]]] = {}
+    prefer_key = {
+        "next_activity": "accuracy",
+        "next_time": "mae",
+        "remaining_time": "mae",
+    }
+    if not outputs_dir.exists():
+        return data
+    for dataset_dir in outputs_dir.iterdir():
+        if not dataset_dir.is_dir() or dataset_dir.name in ("checkpoints", "analysis"):
+            continue
+        dataset = dataset_dir.name
+        for task_dir in dataset_dir.iterdir():
+            if not task_dir.is_dir():
+                continue
+            task = task_dir.name
+            key = prefer_key.get(task)
+            if key is None:
+                continue
+            for model_dir in task_dir.iterdir():
+                if not model_dir.is_dir():
+                    continue
+                model = model_dir.name
+                scores: List[float] = []
+                for fold_dir in model_dir.iterdir():
+                    if not fold_dir.is_dir():
+                        continue
+                    mfile = fold_dir / "metrics.json"
+                    if mfile.exists():
+                        try:
+                            md = json.loads(mfile.read_text())
+                            v = md.get(key)
+                            if isinstance(v, (int, float)):
+                                scores.append(float(v))
+                        except Exception:
+                            pass
+                if scores:
+                    data.setdefault(dataset, {}).setdefault(task, {})[model] = scores
+    return data
+
+
+def _model_track(model_name: str) -> Optional[str]:
+    """Infer track name from model. Returns 'minimal', 'extended', or None.
+    PGTNet is treated as 'extended'.
+    """
+    minimal = {"process_transformer", "mtlformer", "activity_only_lstm"}
+    extended = {"shared_lstm", "specialised_lstm", "pgtnet"}
+    if model_name in minimal:
+        return "minimal"
+    if model_name in extended:
+        return "extended"
+    return None
+
+
+def _compute_ci(values: List[float], confidence: float = 0.95) -> Dict[str, float]:
+    import numpy as _np
+    if not values:
+        return {"mean": float("nan"), "lower": float("nan"), "upper": float("nan"), "n": 0}
+    arr = _np.array(values, dtype=float)
+    mean = float(arr.mean())
+    if arr.size < 2:
+        return {"mean": mean, "lower": mean, "upper": mean, "n": int(arr.size)}
+    # t-based CI across folds
+    sem = float(arr.std(ddof=1) / _np.sqrt(arr.size))
+    from scipy.stats import t
+    h = float(sem * t.ppf((1 + confidence) / 2.0, df=arr.size - 1))
+    return {"mean": mean, "lower": mean - h, "upper": mean + h, "n": int(arr.size)}
+
+
+def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, Any]:
+    """Generate thesis-aligned reports per the user’s schema.
+    Returns a dict with keys: minimal, extended, efficiency, stratified, metadata.
+    """
+    outputs_dir = Path(outputs_dir)
+    fold_scores = _collect_fold_scores(outputs_dir)
+    summary = _load_summary_or_collect(outputs_dir)
+    tasks = ["next_activity", "next_time", "remaining_time"] if task == "all" else [task]
+
+    def filter_models_for_task(t: str, track: str) -> List[str]:
+        all_models = set()
+        for d in summary:
+            if t in summary[d]:
+                all_models |= set(summary[d][t].keys())
+        # Track filter only; include mtlformer per-task results produced by multitask training
+        return [m for m in sorted(all_models) if _model_track(m) == track]
+
+    report: Dict[str, Any] = {"metadata": {"tasks": tasks}, "per_task": {}}
+
+    for t in tasks:
+        per_task = {"minimal": {}, "extended": {}, "rankings": {}, "significance": {}}
+        # Minimal track models per constraints
+        if t == "next_activity":
+            min_models = [m for m in ["process_transformer", "mtlformer", "activity_only_lstm"] if m in filter_models_for_task(t, "minimal")]
+            ext_models = [m for m in ["shared_lstm", "specialised_lstm"] if m in filter_models_for_task(t, "extended")]
+            metric_name = "accuracy"; higher_better = True
+        elif t == "next_time":
+            min_models = [m for m in ["process_transformer", "mtlformer"] if m in filter_models_for_task(t, "minimal")]
+            ext_models = []
+            metric_name = "mae"; higher_better = False
+        else:  # remaining_time
+            min_models = [m for m in ["process_transformer", "mtlformer"] if m in filter_models_for_task(t, "minimal")]
+            ext_models = [m for m in ["pgtnet"] if m in filter_models_for_task(t, "extended")]
+            metric_name = "mae"; higher_better = False
+
+        # Build per-dataset tables with CI
+        datasets = sorted(d for d in summary if t in summary[d])
+        minimal_table = {}
+        extended_table = {}
+        for d in datasets:
+            if t not in fold_scores.get(d, {}):
+                continue
+            # Minimal
+            row_min = {}
+            for m in min_models:
+                vals = fold_scores[d][t].get(m, [])
+                ci = _compute_ci(vals)
+                row_min[m] = ci
+            if row_min:
+                # Ranking within dataset for minimal
+                if higher_better:
+                    ranking = sorted(((m, row_min[m]["mean"]) for m in row_min), key=lambda x: x[1], reverse=True)
+                else:
+                    ranking = sorted(((m, row_min[m]["mean"]) for m in row_min), key=lambda x: x[1])
+                rank_map = {m: i + 1 for i, (m, _) in enumerate(ranking)}
+                for m in row_min:
+                    row_min[m]["rank"] = rank_map[m]
+                minimal_table[d] = row_min
+            # Extended and uplift
+            row_ext = {}
+            for m in ext_models:
+                vals = fold_scores[d][t].get(m, [])
+                ci = _compute_ci(vals)
+                # compute minimal best mean for uplift
+                if minimal_table.get(d):
+                    min_best_mean = None
+                    if higher_better:
+                        min_best_mean = max(minimal_table[d][mm]["mean"] for mm in minimal_table[d])
+                        uplift = (ci["mean"] - min_best_mean) / (min_best_mean if min_best_mean else 1.0)
+                    else:
+                        min_best_mean = min(minimal_table[d][mm]["mean"] for mm in minimal_table[d])
+                        uplift = (min_best_mean - ci["mean"]) / (min_best_mean if min_best_mean else 1.0)
+                    ci["uplift_vs_minimal_best"] = uplift
+                row_ext[m] = ci
+            if row_ext:
+                extended_table[d] = row_ext
+        per_task["minimal"]["per_dataset"] = minimal_table
+        per_task["extended"]["per_dataset"] = extended_table
+
+        # Rankings & significance within-track
+        # Use BenchmarkStatisticalAnalysis for means across datasets
+        def build_stats(models: List[str]):
+            if not models:
+                return {}
+            task_results = {d: {t: {m: summary[d][t][m] for m in models if m in summary[d][t]}} for d in datasets if t in summary[d]}
+            BA = BenchmarkStatisticalAnalysis(task_results, models, [d for d in datasets if t in summary[d]])
+            comp = BA.generate_comprehensive_report(t, include_plackett_luce=True, include_hierarchical_bayes=False)
+            # Limit pairwise tests to top models (min avg rank)
+            avg = comp.get("average_ranks", {})
+            if avg:
+                min_rank = min(avg.values())
+                top_models = [m for m, r in avg.items() if r == min_rank]
+                if len(top_models) >= 2:
+                    BA_top = BenchmarkStatisticalAnalysis(task_results, top_models, [d for d in datasets if t in summary[d]])
+                    comp_top = {
+                        "pairwise_top_only": BA_top.pairwise_wilcoxon_tests(t)
+                    }
+                else:
+                    comp_top = {"pairwise_top_only": {}}
+            else:
+                comp_top = {"pairwise_top_only": {}}
+            comp.update(comp_top)
+            return comp
+
+        per_task["rankings"]["minimal"] = build_stats(min_models)
+        if ext_models:
+            per_task["rankings"]["extended"] = build_stats(ext_models)
+        else:
+            per_task["rankings"]["extended"] = {}
+
+        # Efficiency: attempt to read optional efficiency.json at model level per dataset
+        efficiency = {}
+        for d in datasets:
+            eff_d = {}
+            base = outputs_dir / d / t
+            if not base.exists():
+                continue
+            for m in sorted(min_models + ext_models):
+                mdir = base / m
+                if not mdir.exists():
+                    continue
+                efile = mdir / "efficiency.json"
+                if efile.exists():
+                    try:
+                        eff = json.loads(efile.read_text())
+                        eff_d[m] = eff
+                    except Exception:
+                        pass
+            if eff_d:
+                efficiency[d] = eff_d
+        per_task["efficiency"] = efficiency
+
+        # Stratified: attempt to read optional stratified_metrics.json per model
+        stratified = {}
+        for d in datasets:
+            s_d = {}
+            base = outputs_dir / d / t
+            if not base.exists():
+                continue
+            for m in sorted(min_models + ext_models):
+                mdir = base / m
+                if not mdir.exists():
+                    continue
+                sfile = mdir / "stratified_metrics.json"
+                if sfile.exists():
+                    try:
+                        s = json.loads(sfile.read_text())
+                        s_d[m] = s
+                    except Exception:
+                        pass
+            if s_d:
+                stratified[d] = s_d
+        per_task["stratified"] = stratified
+
+        report["per_task"][t] = per_task
+
+    return report
+
+
 if __name__ == "__main__":
     import argparse, json
     from pathlib import Path
