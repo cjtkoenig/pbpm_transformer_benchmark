@@ -1,0 +1,6 @@
+[submodule "third_party/PGTNet"]
+	path = third_party/PGTNet
+	url = https://github.com/keyvan-amiri/PGTNet.git
+[submodule "third_party/GraphGPS"]
+	path = third_party/GraphGPS
+	url = https://github.com/rampasek/GraphGPS.git

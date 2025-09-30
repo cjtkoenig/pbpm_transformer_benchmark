@@ -870,7 +870,7 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
         # Track filter only; include mtlformer per-task results produced by multitask training
         return [m for m in sorted(all_models) if _model_track(m) == track]
 
-    report: Dict[str, Any] = {"metadata": {"tasks": tasks}, "per_task": {}}
+    report: Dict[str, Any] = {"metadata": {"tasks": tasks}, "per_task": {}, "notes": {}}
 
     for t in tasks:
         per_task = {"minimal": {}, "extended": {}, "rankings": {}, "significance": {}}
@@ -958,10 +958,11 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
             return comp
 
         per_task["rankings"]["minimal"] = build_stats(min_models)
+        # Extended-Track: descriptive only (no inferential tests)
         if ext_models:
-            per_task["rankings"]["extended"] = build_stats(ext_models)
+            per_task["rankings"]["extended"] = {"note": "Extended-Track is descriptive only. No Plackett–Luce, Bayes, or pairwise significance tests run."}
         else:
-            per_task["rankings"]["extended"] = {}
+            per_task["rankings"]["extended"] = {"note": "No Extended-Track models for this task."}
 
         # Efficiency: attempt to read optional efficiency.json at model level per dataset
         efficiency = {}
@@ -1007,7 +1008,70 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                 stratified[d] = s_d
         per_task["stratified"] = stratified
 
+        # Explicit limitation note for NET (next_time): no extended models
+        if t == "next_time":
+            per_task.setdefault("extended", {})["limitation"] = "No extended model available for next_time (NET); reported explicitly as a limitation."
+
         report["per_task"][t] = per_task
+
+    # Global MTLFormer efficiency comparison: one multitask vs sum of three single-task runs
+    mtl_eff: Dict[str, Any] = {}
+    for d in sorted(summary.keys()):
+        multi_path = outputs_dir / d / "multitask" / "mtlformer" / "efficiency.json"
+        multi = None
+        if multi_path.exists():
+            try:
+                multi = json.loads(multi_path.read_text())
+            except Exception:
+                multi = None
+        # Sum single-task runs across NA/NET/RT using process_transformer primarily
+        single_sum = {"train_time_seconds": 0.0, "infer_time_seconds": 0.0, "params": None, "count": 0}
+        single_tasks = ["next_activity", "next_time", "remaining_time"]
+        for tsk in single_tasks:
+            base = outputs_dir / d / tsk
+            if not base.exists():
+                continue
+            # prefer process_transformer; fallback to any minimal
+            candidates = ["process_transformer", "activity_only_lstm"]
+            found = None
+            for cand in candidates:
+                efile = base / cand / "efficiency.json"
+                if efile.exists():
+                    found = efile
+                    break
+            if not found:
+                # last resort: try any model in dir
+                for mdir in base.iterdir():
+                    if mdir.is_dir():
+                        efile = mdir / "efficiency.json"
+                        if efile.exists():
+                            found = efile
+                            break
+            if found:
+                try:
+                    eff = json.loads(found.read_text())
+                    single_sum["train_time_seconds"] += float(eff.get("train_time_seconds", 0.0))
+                    single_sum["infer_time_seconds"] += float(eff.get("infer_time_seconds", 0.0))
+                    # params not additive; store max across single runs for reference
+                    p = eff.get("params")
+                    if isinstance(p, (int, float)):
+                        single_sum["params"] = max(int(p), int(single_sum["params"])) if single_sum["params"] is not None else int(p)
+                    single_sum["count"] += 1
+                except Exception:
+                    pass
+        if multi or single_sum["count"] > 0:
+            mtl_eff[d] = {
+                "multitask_mtlformer": multi or {},
+                "single_task_sum": single_sum,
+                "comparison": {
+                    "train_time_ratio_multi_vs_sum": (float(multi.get("train_time_seconds", 0.0)) / single_sum["train_time_seconds"]) if (multi and single_sum["train_time_seconds"]) else None,
+                    "infer_time_ratio_multi_vs_sum": (float(multi.get("infer_time_seconds", 0.0)) / single_sum["infer_time_seconds"]) if (multi and single_sum["infer_time_seconds"]) else None
+                }
+            }
+    report["mtlformer_efficiency"] = mtl_eff
+
+    # General notes
+    report["notes"]["inference"] = "Inferential statistics (Plackett–Luce, Bayesian tests, non-parametric tests) are restricted to the Minimal-Track. Extended-Track results are descriptive with uplifts vs best minimal model."
 
     return report
 
@@ -1015,32 +1079,38 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
 if __name__ == "__main__":
     import argparse, json
     from pathlib import Path
-    ap = argparse.ArgumentParser(description="Full statistical analysis CLI (Plackett–Luce, Hierarchical Bayes, Friedman/Wilcoxon)")
-    ap.add_argument("--task", required=True, choices=["next_activity", "next_time", "remaining_time"], help="Task to analyze")
+    ap = argparse.ArgumentParser(description="Statistical analysis CLI: per-task full report or thesis-aligned report")
+    ap.add_argument("--task", choices=["next_activity", "next_time", "remaining_time", "all"], default="all", help="Task to analyze (for full report) or 'all'")
     ap.add_argument("--outputs", default="outputs", help="Path to outputs directory")
-    ap.add_argument("--no-pl", dest="pl", action="store_false", help="Disable Plackett–Luce fit")
-    ap.add_argument("--no-hb", dest="hb", action="store_false", help="Disable Hierarchical Bayes fit")
+    ap.add_argument("--no-pl", dest="pl", action="store_false", help="Disable Plackett–Luce fit (full report mode)")
+    ap.add_argument("--no-hb", dest="hb", action="store_false", help="Disable Hierarchical Bayes fit (full report mode)")
+    ap.add_argument("--thesis", action="store_true", help="Generate thesis-aligned report across tasks (Minimal vs Extended, uplifts, MTLFormer efficiency)")
     ap.set_defaults(pl=True, hb=True)
     args = ap.parse_args()
 
     outputs_dir = Path(args.outputs)
-    data = _load_summary_or_collect(outputs_dir)
-
-    # Collect model and dataset names where this task appears
-    datasets = sorted([d for d, tmap in data.items() if args.task in tmap])
-    models = sorted({m for d in datasets for m in data[d][args.task].keys()})
-    if not datasets or not models:
-        print(f"No data found for task {args.task} under {outputs_dir}")
-        raise SystemExit(1)
-
-    # Build results dict limited to the selected task
-    results = {d: {args.task: data[d][args.task]} for d in datasets}
-
-    BA = BenchmarkStatisticalAnalysis(results, models, datasets)
-    report = BA.generate_comprehensive_report(args.task, include_plackett_luce=args.pl, include_hierarchical_bayes=args.hb)
 
     out_dir = outputs_dir / "analysis"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"full_report_{args.task}.json"
-    out_path.write_text(json.dumps(report, indent=2))
-    print(f"Saved full statistical report to {out_path}")
+
+    if args.thesis:
+        thesis = generate_thesis_report(outputs_dir, task=args.task)
+        out_path = out_dir / ("thesis_report.json" if args.task == "all" else f"thesis_report_{args.task}.json")
+        out_path.write_text(json.dumps(thesis, indent=2))
+        print(f"Saved thesis-aligned report to {out_path}")
+    else:
+        data = _load_summary_or_collect(outputs_dir)
+        # Collect model and dataset names where this task appears
+        datasets = sorted([d for d, tmap in data.items() if args.task in tmap])
+        models = sorted({m for d in datasets for m in data[d][args.task].keys()})
+        if not datasets or not models:
+            print(f"No data found for task {args.task} under {outputs_dir}")
+            raise SystemExit(1)
+
+        # Build results dict limited to the selected task
+        results = {d: {args.task: data[d][args.task]} for d in datasets}
+        BA = BenchmarkStatisticalAnalysis(results, models, datasets)
+        report = BA.generate_comprehensive_report(args.task, include_plackett_luce=args.pl, include_hierarchical_bayes=args.hb)
+        out_path = out_dir / f"full_report_{args.task}.json"
+        out_path.write_text(json.dumps(report, indent=2))
+        print(f"Saved full statistical report to {out_path}")

@@ -75,3 +75,92 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# PyTorch Lightning
+lightning_logs/
+*.ckpt
+
+# Outputs and results
+outputs/
+results/
+checkpoints/
+
+# Data (keep structure, exclude processed data)
+data/processed/*
+!data/processed/.gitkeep
+data/raw/*.csv
+!data/raw/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+
+# Local virtualenvs inside third_party (should never be committed)
+third_party/graphgps_venv/
+
+
+# pyenv/asdf local python version pin (local-only)
+.python-version
+
+# PGTNet processed cache (like data/processed/)
+data/processed_pgtnet/*

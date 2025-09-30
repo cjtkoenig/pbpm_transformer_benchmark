@@ -37,7 +37,7 @@ model:
 
 train:
   batch_size: 128
-  max_epochs: 50
+  max_epochs: 3
   learning_rate: null          # optional scalar override; if null, use train.learning_rates[model.name] when available
   learning_rates:              # per-model defaults
     process_transformer: 1e-2

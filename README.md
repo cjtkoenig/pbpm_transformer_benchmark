@@ -67,6 +67,29 @@ Environment notes
 - Torch: 2.8.0 (MPS supported on Apple Silicon)
 - TensorFlow: prefer >= 2.20.0 on Python 3.11; avoid 2.15.1 on macOS with Python 3.11.
 
+### Environments (Two-Env Setup)
+There are two logical environments in this benchmark:
+- Base benchmark environment (this repo): runs preprocessing, CV, TensorFlow-based models (ProcessTransformer, MTLFormer, LSTMs) and all analysis. This can be minimal (no TF) if you only run CV tests.
+- GraphGPS/PGTNet environment: runs PGTNet (PyTorch Geometric + GraphGPS). Keep it separate to avoid dependency conflicts (PyG/Torch pins differ).
+
+Recommended flow
+- Create base env via make setup (minimal) or make install (full).
+- When you need PGTNet, bootstrap a dedicated GraphGPS env and point model.pgtnet.python to its interpreter.
+
+Create the GraphGPS env (CPU example)
+```bash
+make graphgps_env
+# Interpreter path will be: third_party/graphgps_venv/bin/python
+```
+
+Use the dedicated interpreter for PGTNet runs
+```bash
+uv run python -m src.cli task=remaining_time \
+  data.datasets="[Helpdesk]" data.attribute_mode=extended \
+  model.name=pgtnet +model.pgtnet.execute=true \
+  +model.pgtnet.python=third_party/graphgps_venv/bin/python
+```
+
 ## Datasets and Preprocessing
 - Place raw CSV logs in data/raw with at least columns case:concept:name, concept:name, and timestamps where required.
 - Preprocessing runs on first use and caches under data/processed/.
@@ -115,6 +138,18 @@ make smoke_test_process_transformer
 
 # MTLFormer multitask on Helpdesk (2 epochs)
 make smoke_test_mtlformer
+
+# PGTNet plan-only smoke on Helpdesk (generates manifests/masks without executing external repos)
+make smoke_test_pgtnet
+
+# PGTNet execute smoke (1 fold, requires external repos)
+make smoke_test_pgtnet_run
+
+# Bootstrap a dedicated GraphGPS venv (Torch + PyG) then run the execute smoke
+make smoke_test_pgtnet_bootstrap
+
+# Or create the GraphGPS env only (use +model.pgtnet.python to point to it)
+make graphgps_env
 ```
 
 Alternative: direct uv CLI
@@ -137,6 +172,56 @@ uv run python -m src.cli preprocess_action=info
 uv run python -m src.cli preprocess_action=force data.datasets="[Helpdesk]"
 ```
 You should see summaries under data/processed and no errors. Use clear if you need a fresh state: `make preprocess_clear` or `uv run python -m src.cli preprocess_action=clear`.
+
+## Full Benchmark Run (Step-by-Step)
+This walkthrough shows the typical flow from setup to analysis. Adjust ACCELERATOR and dataset lists as needed.
+
+1) Environment setup
+- Minimal (fast; enough for preprocessing and CV tests):
+  - make setup
+- Full install (TF + all extras from requirements.txt):
+  - make install
+- Optional: Create a dedicated GraphGPS/PGTNet env for PGTNet:
+  - make graphgps_env
+
+2) Prepare data
+- Place CSVs in data/raw (e.g., data/raw/Helpdesk.csv)
+- Inspect what’s cached:
+  - make preprocess_info
+- Force preprocessing for selected datasets (safe and fast for first time):
+  - make preprocess_force DATASETS="[\"Helpdesk\"]"
+
+3) Run baseline models
+- ProcessTransformer (single tasks):
+  - uv run python -m src.cli model.name=process_transformer task=next_activity data.datasets="[Helpdesk]"
+  - uv run python -m src.cli model.name=process_transformer task=next_time data.datasets="[Helpdesk]"
+  - uv run python -m src.cli model.name=process_transformer task=remaining_time data.datasets="[Helpdesk]"
+- MTLFormer (multitask):
+  - uv run python -m src.cli model.name=mtlformer task=multitask data.datasets="[Helpdesk]"
+
+4) Run PGTNet (remaining_time, extended attributes)
+- Plan-only (generate conversion workspace, masks, and manifests; no external execution):
+  - uv run python -m src.cli task=remaining_time data.datasets="[Helpdesk]" data.attribute_mode=extended model.name=pgtnet +model.pgtnet.execute=false
+- Execute end-to-end for 1 fold (requires third_party repos and a GraphGPS env):
+  - uv run python -m src.cli task=remaining_time data.datasets="[Helpdesk]" data.attribute_mode=extended model.name=pgtnet cv.n_folds=1 \
+    +model.pgtnet.execute=true \
+    +model.pgtnet.pgtnet_repo=/path/to/PGTNet \
+    +model.pgtnet.graphgps_repo=/path/to/GraphGPS \
+    +model.pgtnet.python=third_party/graphgps_venv/bin/python \
+    +model.pgtnet.auto_collect_predictions=true
+- Where to look:
+  - data/processed_pgtnet/Helpdesk/converted, mapping.csv, fold_*/masks.json
+  - outputs/pgtnet/Helpdesk/fold_0/*.log and run_manifest.json
+  - outputs/Helpdesk/remaining_time/pgtnet/fold_0/metrics.json (after predictions are collected)
+
+5) Aggregate and analyze
+- Quick stats across folds:
+  - make analyze
+- Full stats per task:
+  - make analyze_full TASK=remaining_time
+
+Tips
+- For a quick overall dry run, see smoke tests: make smoke_test_process_transformer, make smoke_test_mtlformer, make smoke_test_pgtnet, make smoke_test_pgtnet_run, and make smoke_test_pgtnet_bootstrap.
 
 ## Running Tasks
 ```bash
@@ -188,6 +273,71 @@ uv run python -m src.cli task=next_activity data.datasets="[Helpdesk,Tourism]"
 - Aggregation utilities compute mean/std/min/max across folds.
 
 ## Models and Adapters
+
+### PGTNet (External Runner)
+PGTNet is integrated as a special-case external model for the remaining_time task in extended attribute mode. It runs in its own environment (separate from this benchmark) and is orchestrated via subprocess calls.
+
+Constraints
+- Only task=remaining_time
+- Requires data.attribute_mode=extended
+- Uses canonical 5-fold, case-based splits from this benchmark; PGTNet must not create its own splits
+- Third-party code is untouched and expected under third_party/
+
+Setup
+1) Place/clone the third-party repos (or set absolute paths in the config):
+   - third_party/GraphGPS (or set model.pgtnet.graphgps_repo)
+   - third_party/PGTNet (or set model.pgtnet.pgtnet_repo)
+2) Configure configs/model/pgtnet.yaml:
+   - model.name=pgtnet
+   - model.pgtnet.python: path to the GraphGPS/PGTNet Python (e.g., /opt/conda/envs/graphgps/bin/python)
+   - converter.config_dir/config_name: select the PGTNet converter config per dataset
+   - train.cfg_file and infer.cfg_file: GraphGPS YAMLs per dataset
+   - dataset_key: key used by PGTNet's ResultHandler (e.g., HelpDesk, BPIC15_1)
+   - execute=true to actually run external processes; execute=false to write scripts/plan only
+
+How to run
+- Plan-only (default): writes per-fold scripts/manifests without executing third-party code
+  ```bash
+  uv run python -m src.cli task=remaining_time \
+    data.datasets="[Helpdesk]" \
+    data.attribute_mode=extended \
+    model.name=pgtnet \
+    +model.pgtnet.execute=false
+  ```
+- Execute: triggers conversion → training → inference via subprocess
+  ```bash
+  uv run python -m src.cli task=remaining_time \
+    data.datasets="[Helpdesk]" \
+    data.attribute_mode=extended \
+    model.name=pgtnet \
+    +model.pgtnet.pgtnet_repo=/path/to/PGTNet \
+    +model.pgtnet.graphgps_repo=/path/to/GraphGPS \
+    +model.pgtnet.python=/opt/conda/envs/graphgps/bin/python \
+    +model.pgtnet.converter.config_name=helpdesk.yaml \
+    +model.pgtnet.train.cfg_file=configs/GPS/helpdesk-train.yaml \
+    +model.pgtnet.infer.cfg_file=configs/GPS/helpdesk-infer.yaml \
+    +model.pgtnet.dataset_key=HelpDesk \
+    +model.pgtnet.execute=true \
+    +model.pgtnet.auto_collect_predictions=true
+  ```
+
+Generated artifacts
+- data/processed_pgtnet/<dataset>/
+  - converted/               # cache for PGTNet converter (workspace)
+  - mapping.csv              # mapping of graph_idx -> (case_id, prefix_len) from canonical splits
+  - fold_<k>/masks.json      # per-fold train/val/test case ID lists
+- outputs/pgtnet/<dataset>/fold_<k>/
+  - *.stdout.log, *.stderr.log
+  - run_manifest.json        # commands, exit codes, timing, third_party commits
+  - predictions_test.csv     # optional if auto_collected
+- outputs/<dataset>/remaining_time/pgtnet/fold_<k>/
+  - metrics.json             # MAE (if predictions available)
+  - run_manifest.json        # a copy of the manifest for convenience
+
+Notes
+- This path does not alter canonical preprocessing or splits.
+- If predictions lack case_id/prefix_len, the runner invokes PGTNet's ResultHandler (when dataset_key is provided) to reconstruct identities; otherwise, you can place predictions_test.csv in the expected folder and re-run aggregation.
+- PyG/Torch versions required by PGTNet may differ from this benchmark; keep them isolated via model.pgtnet.python.
 Adapters bridge canonical data and model I/O. They may reshape and cast, but must not change content.
 
 Allowed
@@ -237,6 +387,8 @@ make smoke_test_process_transformer   # process_transformer on 3 tasks (2 epochs
 make smoke_test_mtlformer             # mtlformer multitask (2 epochs)
 make smoke_test_specialised_lstm      # specialised_lstm next_activity (2 epochs)
 make smoke_test_shared_lstm           # shared_lstm next_activity (2 epochs)
+make smoke_test_pgtnet                # PGTNet plan-only (manifests/masks; no external execution)
+make smoke_test_pgtnet_run            # PGTNet execute (1 fold) if external repos and env are configured
 
 make analyze           # lightweight analysis summary
 make analyze_full TASK=next_activity  # full analysis for a task
@@ -244,6 +396,7 @@ make analyze_all       # full analysis for all tasks
 make stats DATASET=Helpdesk  # dataset statistics
 make stats_all
 make sysinfo           # system info snapshot
+make smoke_test_pgtnet # PGTNet plan-only smoke (generates manifests/masks, no external execution)
 make clean             # clear caches only
 make clean_outputs     # remove outputs/ and lightning_logs/
 make clean_processed   # clear data/processed cache
@@ -303,3 +456,51 @@ Notes
 
 
 
+
+
+
+## PGTNet XES Requirement and CSV → XES Converter
+PGTNet’s converter (third_party/PGTNet/GTconvertor.py) expects an XES file as input. The canonical CSVs under data/raw are used by the in-repo models (Transformers/LSTMs) but are not directly consumable by PGTNet.
+
+To generate an XES from your CSVs, use the provided script or Make targets.
+
+Using the Make targets (preferred)
+```bash
+# Convert a single dataset from data/raw/<Dataset>.csv → data/raw/<Dataset>.xes
+make csv_to_xes DATASET=Helpdesk
+
+# Convert all CSVs under data/raw to XES next to them
+make csv_to_xes_all              # add OVERWRITE=1 to replace existing .xes files
+```
+
+Running the script directly
+```bash
+# Using the base env (ensure pm4py is installed) or the GraphGPS helper env
+uv run python scripts/csv_to_xes.py --dataset Helpdesk
+# or
+third_party/graphgps_venv/bin/python scripts/csv_to_xes.py --csv data/raw/Helpdesk.csv --out data/raw/HelpDesk.xes
+```
+
+Where to place the XES for PGTNet
+- Recommended: keep it in data/raw. The PGTNet runner will attempt to locate and copy it into third_party/PGTNet/raw_dataset with the dataset name required by conversion_configs/<cfg>.yaml.
+- Alternatively, place the file directly under third_party/PGTNet/raw_dataset using the exact filename expected in the chosen conversion config, or pass an absolute path at runtime:
+  ```bash
+  +model.pgtnet.converter.input_xes=/abs/path/to/HelpDesk.xes
+  ```
+
+Notes
+- The GraphGPS helper environment includes pm4py and can be used to run the converter even if your base env doesn’t have pm4py:
+  ```bash
+  make graphgps_env
+  third_party/graphgps_venv/bin/python scripts/csv_to_xes.py --dataset Helpdesk
+  ```
+- Ensure the raw CSV contains at least these columns (or override names via flags):
+  - case:concept:name (case id)
+  - concept:name (activity)
+  - time:timestamp (event timestamp)
+- After generating the XES, you can run the PGTNet execute smoke with:
+  ```bash
+  make smoke_test_pgtnet_run DATASET=Helpdesk \
+    +model.pgtnet.python=third_party/graphgps_venv/bin/python \
+    XES=$(pwd)/data/raw/HelpDesk.xes
+  ```

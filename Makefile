@@ -34,6 +34,9 @@ help:
 	echo "  install_minimal Install minimal deps to run tests fast"; \
 	echo "  test            Run CV sanity test (test_cv.py)"; \
 	echo "  preprocess_*    Inspect/force/clear processed data cache"; \
+	echo "  graphgps_env    Provision helper venv for PGTNet/GraphGPS (CPU Torch 2.8 + PyG + deps)"; \
+	echo "  smoke_test_pgtnet_run [DATASET=Helpdesk] [XES=/abs/path/file.xes]  Execute PGTNet pipeline for 1 fold (uses helper venv if present)"; \
+	echo "  smoke_test_pgtnet_bootstrap  Provision helper venv then run smoke_test_pgtnet_run"; \
 	echo "  smoke_test      Run chosen MODEL across all datasets and tasks for 1 epoch (mtlformer adds multitask) (ACCELERATOR=cpu|mps|gpu)"; \
 	echo "  run_both_lstms  Run specialised_lstm and shared_lstm on all datasets (extended) for 1 epoch each"; \
 	echo "  run_benchmark_minimal_mode  Force preprocess and run all models/tasks on minimal attributes (uses config-defined epochs and per-model LRs)"; \
@@ -178,7 +181,7 @@ preprocess_clear: dirs
 	fi
 
 # ===== Analysis =====
-.PHONY: analyze analyze_full analyze_all
+.PHONY: analyze analyze_full analyze_all analyze_thesis
 analyze: dirs
 	@echo "Running lightweight analysis summary (outputs/analysis/summary.json)..."
 	uv run python -m src.cli analysis.action=run_stats
@@ -198,6 +201,16 @@ analyze_all: dirs
 		echo "Running full statistical analysis for task=$$t..."; \
 		uv run python -m src.utils.statistical_analysis --task $$t || exit $$?; \
 	done
+
+# Thesis-aligned report across tasks (Minimal vs Extended, uplifts, MTLFormer efficiency)
+# Usage: make analyze_thesis [TASK=all|next_activity|next_time|remaining_time]
+ analyze_thesis: dirs
+	@echo "Generating thesis-aligned report (outputs/analysis/thesis_report*.json)..."; \
+	if [ -z "$(TASK)" ] || [ "$(TASK)" = "all" ]; then \
+		uv run python -m src.utils.statistical_analysis --thesis --task all; \
+	else \
+		uv run python -m src.utils.statistical_analysis --thesis --task $(TASK); \
+	fi
 
 # ===== Smoke Tests =====
 
@@ -240,6 +253,45 @@ smoke_test_shared_lstm: dirs
 	@echo "=== Smoke: shared_lstm next_activity on Helpdesk (2 epochs, extended attrs) ==="; \
 	uv run python -m src.cli model.name=shared_lstm task=next_activity data.datasets="[\"Helpdesk\"]" data.attribute_mode=extended train.max_epochs=2;
 
+# PGTNet smoke test (plan-only by default)
+# Usage:
+#   make smoke_test_pgtnet [DATASET=Helpdesk] [ACCELERATOR=cpu|mps|gpu]
+# Notes:
+# - This target does not actually train PGTNet; it generates per-fold plans/manifests
+#   to run the external PGTNet/GraphGPS pipeline. It also writes mapping/masks under
+#   data/processed_pgtnet/<dataset> based on canonical splits.
+# - To execute training/inference externally later, re-run the CLI with +model.pgtnet.execute=true
+#   and configure model.pgtnet.python, pgtnet_repo, graphgps_repo.
+.PHONY: smoke_test_pgtnet
+smoke_test_pgtnet: dirs
+	@DATASET_NAME=$${DATASET:-Helpdesk}; \
+	echo "=== Smoke: PGTNet (plan-only) on $$DATASET_NAME (remaining_time, extended) ==="; \
+	uv run python -m src.cli preprocess_action=force data.datasets="[\"$$DATASET_NAME\"]" || exit $$?; \
+	uv run python -m src.cli task=remaining_time data.datasets="[\"$$DATASET_NAME\"]" data.attribute_mode=extended model.name=pgtnet +model.pgtnet.execute=false +model.pgtnet.auto_collect_predictions=false || exit $$?; \
+	echo "Plan written under outputs/pgtnet/$$DATASET_NAME/ and outputs/$$DATASET_NAME/remaining_time/pgtnet/"
+
+# PGTNet smoke test (execute actual external pipeline for 1 fold if repos are available)
+# Usage:
+#   make smoke_test_pgtnet_run [DATASET=Helpdesk]
+# Prerequisites:
+#   - third_party/PGTNet and third_party/GraphGPS must point to working checkouts
+#   - model.pgtnet.python should be a Python interpreter with their deps
+# Behavior:
+#   - Runs fold 0 only (cv.n_folds=1)
+#   - Uses extended attribute mode and writes per-fold manifests/logs under outputs/pgtnet/<dataset>/
+.PHONY: smoke_test_pgtnet_run
+smoke_test_pgtnet_run: dirs
+	@DATASET_NAME=$${DATASET:-Helpdesk}; \
+	PY_PATH=$$( [ -x third_party/graphgps_venv/bin/python ] && echo "third_party/graphgps_venv/bin/python" || echo "" ); \
+	[ -n "$$PY_PATH" ] && echo "Using helper interpreter: $$PY_PATH" || echo "No helper interpreter found. You can create it via: make graphgps_env"; \
+	if [ -n "$$PY_PATH" ]; then $(MAKE) check_graphgps_env || { echo "GraphGPS helper env is missing modules. Run: make graphgps_env"; exit 1; }; fi; \
+	if [ -n "$(XES)" ]; then XES_ARG="+model.pgtnet.converter.input_xes=$(XES)"; else XES_ARG=""; fi; \
+	echo "=== Smoke: PGTNet (execute) on $$DATASET_NAME (remaining_time, extended, 1 fold) ==="; \
+	if [ -n "$$PY_PATH" ]; then EXTRA="+model.pgtnet.python=$$PY_PATH"; else EXTRA=""; fi; \
+	uv run python -m src.cli task=remaining_time data.datasets="[\"$$DATASET_NAME\"]" data.attribute_mode=extended model.name=pgtnet cv.n_folds=1 +model.pgtnet.execute=true +model.pgtnet.auto_collect_predictions=false $$EXTRA $$XES_ARG || exit $$?; \
+	echo "Tip: Place the XES file under third_party/PGTNet/raw_dataset with the exact name from conversion_configs/<cfg>.yaml, or pass XES=/abs/path/file.xes"; \
+	echo "Check outputs/pgtnet/$$DATASET_NAME/fold_0/ for logs and outputs."
+
 # Helpers to list available items
 .PHONY: list_datasets list_tasks list_models
 list_datasets:
@@ -260,7 +312,8 @@ list_models:
 		echo "  - mtlformer" && \
 		echo "  - activity_only_lstm" && \
 		echo "  - specialised_lstm" && \
-		echo "  - shared_lstm"
+		echo "  - shared_lstm" && \
+		echo "  - pgtnet (external)"
 
 # Basic test target (README mentions make test). Runs the CV sanity test.
 .PHONY: test
@@ -312,3 +365,104 @@ thesis_report: dirs
 		echo "Task specified: $(TASK)"; \
 		uv run python -m src.cli analysis.action=thesis_report analysis.task=$(TASK); \
 	fi
+
+
+# Create a dedicated Python environment for GraphGPS/PGTNet with Torch + PyG (CPU)
+.PHONY: graphgps_env
+graphgps_env:
+	@echo "Creating GraphGPS Python venv under third_party/graphgps_venv ..."; \
+	uv venv third_party/graphgps_venv; \
+	third_party/graphgps_venv/bin/python -m ensurepip --upgrade || true; \
+	third_party/graphgps_venv/bin/python -m pip install --upgrade pip; \
+	# Install CPU-only PyTorch 2.8.0 for maximum wheel availability across machines
+	third_party/graphgps_venv/bin/python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.8.0; \
+	# Install PyG packages against torch 2.8.0 CPU wheels from the official wheel index
+	third_party/graphgps_venv/bin/python -m pip install -f https://data.pyg.org/whl/torch-2.8.0+cpu.html torch_geometric torch_scatter; \
+	# GraphGym expects pytorch_lightning
+	third_party/graphgps_venv/bin/python -m pip install pytorch_lightning==2.5.3; \
+	# Converter/runtime utilities
+	third_party/graphgps_venv/bin/python -m pip install pyyaml; \
+	third_party/graphgps_venv/bin/python -m pip install pm4py; \
+	third_party/graphgps_venv/bin/python -m pip install "scikit-learn>=1.4,<1.6"; \
+	third_party/graphgps_venv/bin/python -m pip install yacs; \
+	third_party/graphgps_venv/bin/python -m pip install pandas==2.3.1; \
+	# Additional GraphGPS/PGTNet runtime dependencies
+	third_party/graphgps_venv/bin/python -m pip install einops; \
+	third_party/graphgps_venv/bin/python -m pip install local-attention; \
+	third_party/graphgps_venv/bin/python -m pip install axial-positional-embedding; \
+	third_party/graphgps_venv/bin/python -m pip install performer-pytorch; \
+	third_party/graphgps_venv/bin/python -m pip install ogb
+	third_party/graphgps_venv/bin/python -m pip install 'setuptools<70'
+	# Guard against third-party 'importlib' shadowing the stdlib 'importlib' module
+	third_party/graphgps_venv/bin/python -m pip uninstall -y importlib >/dev/null 2>&1 || true; \
+	echo "GraphGPS Python ready at third_party/graphgps_venv/bin/python";
+
+# Bootstrap env then run the PGTNet execute smoke test
+.PHONY: smoke_test_pgtnet_bootstrap
+smoke_test_pgtnet_bootstrap: graphgps_env
+	@$(MAKE) smoke_test_pgtnet_run
+
+.PHONY: check_graphgps_env
+check_graphgps_env:
+	@PY=third_party/graphgps_venv/bin/python; \
+	if [ ! -x "$$PY" ]; then echo "GraphGPS helper interpreter not found at third_party/graphgps_venv/bin/python. Run: make graphgps_env"; exit 1; fi; \
+	MODS="yaml pm4py sklearn pandas torch torch_geometric pytorch_lightning yacs torch_scatter"; \
+	MISSING=""; \
+	for M in $$MODS; do \
+		$$PY -c "import $$M" >/dev/null 2>&1 || MISSING="$$MISSING $$M"; \
+	done; \
+	if [ -z "$$MISSING" ]; then echo "OK"; else echo "Missing:$$MISSING"; exit 1; fi
+
+
+# ===== CSV ↔ XES helpers =====
+.PHONY: csv_to_xes csv_to_xes_all xes_to_csv
+
+# Convert a single CSV under data/raw to XES.
+# Usage:
+#   make csv_to_xes DATASET=Helpdesk
+#   make csv_to_xes CSV=/abs/path/in.csv OUT=/abs/path/out.xes
+csv_to_xes:
+	@# Prefer the helper interpreter (has pm4py) if available
+	if [ -x third_party/graphgps_venv/bin/python ]; then PY=third_party/graphgps_venv/bin/python; UV=""; else PY="uv run python"; fi; \
+	if [ -n "$(DATASET)" ]; then \
+	  echo "Converting dataset '$(DATASET)' (data/raw/$(DATASET).csv → data/raw/$(DATASET).xes)"; \
+	  $$PY scripts/csv_to_xes.py --dataset "$(DATASET)" $(if $(OUT),--out "$(OUT)",) $(if $(OVERWRITE),--overwrite,) || exit $$?; \
+	elif [ -n "$(CSV)" ]; then \
+	  echo "Converting CSV '$(CSV)' → $(if $(OUT),$(OUT),auto .xes)"; \
+	  $$PY scripts/csv_to_xes.py --csv "$(CSV)" $(if $(OUT),--out "$(OUT)",) $(if $(OVERWRITE),--overwrite,) || exit $$?; \
+	else \
+	  echo "Specify DATASET=<name> (uses data/raw/<name>.csv) or CSV=/path/to/file.csv"; exit 2; \
+	fi
+
+# Convert XES in data/raw to CSV.
+# Usage:
+#   make xes_to_csv DATASET=BPI_Challenge_2012 [OVERWRITE=1]
+#   make xes_to_csv XES=/abs/path/in.xes OUT=/abs/path/out.csv
+xes_to_csv:
+	@# Prefer the helper interpreter (has pm4py) if available
+	if [ -x third_party/graphgps_venv/bin/python ]; then PY=third_party/graphgps_venv/bin/python; else PY="uv run python"; fi; \
+	if [ -n "$(DATASET)" ]; then \
+	  echo "Converting dataset '$(DATASET)' (data/raw/$(DATASET).xes → data/raw/$(DATASET).csv)"; \
+	  $$PY scripts/xes_to_csv.py --dataset "$(DATASET)" $(if $(OUT),--out "$(OUT)",) $(if $(OVERWRITE),--overwrite,) || exit $$?; \
+	elif [ -n "$(XES)" ]; then \
+	  echo "Converting XES '$(XES)' → $(if $(OUT),$(OUT),auto .csv)"; \
+	  $$PY scripts/xes_to_csv.py --xes "$(XES)" $(if $(OUT),--out "$(OUT)",) $(if $(OVERWRITE),--overwrite,) || exit $$?; \
+	else \
+	  echo "Specify DATASET=<name> (uses data/raw/<name>.xes) or XES=/path/to/file.xes"; exit 2; \
+	fi
+
+# Convert all CSVs in data/raw to XES next to them (skips existing unless OVERWRITE=1)
+csv_to_xes_all:
+	@set -e; \
+	if [ -x third_party/graphgps_venv/bin/python ]; then PY=third_party/graphgps_venv/bin/python; else PY="uv run python"; fi; \
+	shopt -s nullglob; \
+	for f in data/raw/*.csv; do \
+	  base=$${f%.csv}; out="$$base.xes"; \
+	  if [ -f "$$out" ] && [ "$(OVERWRITE)" != "1" ]; then \
+	    echo "Skip existing $$out (use OVERWRITE=1 to overwrite)"; \
+	  else \
+	    echo "Converting $$f → $$out"; \
+	    $$PY scripts/csv_to_xes.py --csv "$$f" --out "$$out" $(if $(OVERWRITE),--overwrite,) || exit $$?; \
+	  fi; \
+	done; \
+	echo "Done."
