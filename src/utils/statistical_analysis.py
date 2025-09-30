@@ -733,6 +733,11 @@ def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str,
                         s = rec.get("score")
                         if isinstance(s, (int, float)):
                             results[dataset][task][m] = float(s)
+            # Merge external results if any
+            ext_summary, _ = _ingest_external_results(outputs_dir)
+            for d, tmap in ext_summary.items():
+                for t, mmap in tmap.items():
+                    results.setdefault(d, {}).setdefault(t, {}).update(mmap)
             return results
         except Exception:
             pass
@@ -776,6 +781,11 @@ def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str,
                     if task in ("next_time", "remaining_time") and key == "mae":
                         score = -score
                     results.setdefault(dataset, {}).setdefault(task, {})[model] = score
+    # Merge external results if any
+    ext_summary, _ = _ingest_external_results(outputs_dir)
+    for d, tmap in ext_summary.items():
+        for t, mmap in tmap.items():
+            results.setdefault(d, {}).setdefault(t, {}).update(mmap)
     return results
 
 
@@ -827,13 +837,18 @@ def _collect_fold_scores(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str, Lis
 
 def _model_track(model_name: str) -> Optional[str]:
     """Infer track name from model. Returns 'minimal', 'extended', or None.
-    PGTNet is treated as 'extended'.
+    External PGTNet labels (e.g., 'PGTNet (external, splits=...)') are treated as 'extended'.
     """
+    name = (model_name or "").strip()
+    lname = name.lower()
     minimal = {"process_transformer", "mtlformer", "activity_only_lstm"}
-    extended = {"shared_lstm", "specialised_lstm", "pgtnet"}
-    if model_name in minimal:
+    extended = {"shared_lstm", "specialised_lstm"}
+    if name in minimal:
         return "minimal"
-    if model_name in extended:
+    if name in extended:
+        return "extended"
+    # Heuristic: any model label mentioning 'pgtnet' belongs to extended track
+    if "pgtnet" in lname or lname.startswith("pgt"):
         return "extended"
     return None
 
@@ -885,7 +900,8 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
             metric_name = "mae"; higher_better = False
         else:  # remaining_time
             min_models = [m for m in ["process_transformer", "mtlformer"] if m in filter_models_for_task(t, "minimal")]
-            ext_models = [m for m in ["pgtnet"] if m in filter_models_for_task(t, "extended")]
+            # Include any extended-track models available for remaining_time (e.g., external PGTNet labels)
+            ext_models = filter_models_for_task(t, "extended")
             metric_name = "mae"; higher_better = False
 
         # Build per-dataset tables with CI
@@ -1114,3 +1130,99 @@ if __name__ == "__main__":
         out_path = out_dir / f"full_report_{args.task}.json"
         out_path.write_text(json.dumps(report, indent=2))
         print(f"Saved full statistical report to {out_path}")
+
+
+
+def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dict[str, float]]], Dict[str, Dict[str, Dict[str, List[float]]]]]:
+    """
+    Load external benchmark results placed under outputs/external_results/ and return
+    two structures:
+      - (summary_add): {dataset: {task: {model_label: score}}} where score follows
+        _load_summary_or_collect conventions (accuracy higher-is-better; time tasks inverted sign)
+      - (fold_add): {dataset: {task: {model_label: [fold_scores...]}}} where fold scores
+        are raw (accuracy or MAE as-is) for inclusion in confidence intervals.
+
+    Accepted format (per file):
+      - JSON list of records, each record with keys:
+        {"dataset": str, "task": str, "model": str, "metric": "accuracy|mae",
+         "score": float (optional if folds given),
+         "fold": int (optional; if present with 'value', ingested as a single-fold score),
+         "value": float (used with 'fold'),
+         "folds": [float, ...] (alternative to single fold records),
+         "splits": str (optional provenance label, e.g., 'canonical' or 'author')}
+
+    Any other file format or JSON structure is ignored.
+    """
+    from pathlib import Path as _P
+    import json as _json
+
+    summary_add: Dict[str, Dict[str, Dict[str, float]]] = {}
+    fold_add: Dict[str, Dict[str, Dict[str, List[float]]]] = {}
+    ext_dir = _P(outputs_dir) / "external_results"
+    if not ext_dir.exists():
+        return summary_add, fold_add
+
+    def _label(model: str, splits: Optional[str]) -> str:
+        s = f"{model} (external" + (f", splits={splits}" if splits else ")")
+        if not s.endswith(")"):
+            s = s + ")"
+        return s
+
+    def _add(dataset: str, task: str, model_label: str, metric: str, score: Optional[float], folds: Optional[List[float]]):
+        # Normalize
+        dataset = str(dataset)
+        task = str(task)
+        metric = str(metric).lower() if metric else None
+        if folds:
+            try:
+                fvals = [float(x) for x in folds]
+            except Exception:
+                fvals = []
+        else:
+            fvals = []
+        if score is not None:
+            try:
+                sc = float(score)
+            except Exception:
+                sc = None
+        else:
+            sc = None
+        # Merge into fold_add
+        if fvals:
+            fold_add.setdefault(dataset, {}).setdefault(task, {})[model_label] = fvals
+        # Derive summary score
+        if sc is None and fvals:
+            sc = float(np.mean(fvals))
+        if sc is None:
+            return
+        # Invert time tasks to match summary convention (higher is better)
+        if task in ("next_time", "remaining_time") and metric == "mae":
+            sc = -float(sc)
+        summary_add.setdefault(dataset, {}).setdefault(task, {})[model_label] = float(sc)
+
+    # Iterate only JSON files and only accept top-level lists of records
+    for f in ext_dir.glob("*.json"):
+        try:
+            obj = _json.loads(f.read_text())
+        except Exception:
+            continue
+        if not isinstance(obj, list):
+            # Not the accepted format
+            continue
+        for rec in obj:
+            if not isinstance(rec, dict):
+                continue
+            ds = rec.get("dataset")
+            t = rec.get("task")
+            model = rec.get("model")
+            metric = rec.get("metric")
+            splits = rec.get("splits")
+            folds = rec.get("folds")
+            # Support single fold record via {fold, value}
+            if folds is None and rec.get("fold") is not None and rec.get("value") is not None:
+                folds = [rec.get("value")]
+            score = rec.get("score")
+            if ds and t and model and metric:
+                _add(ds, t, _label(model, splits), metric, score, folds)
+
+    return summary_add, fold_add

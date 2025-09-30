@@ -63,19 +63,29 @@ class CanonicalLogsProcessor:
         df["Activity"] = df["Activity"].astype(str).str.lower()
         df["Activity"] = df["Activity"].str.replace(" ", "-", regex=False)
         
-        # Handle timestamp robustly: coerce to string if needed before string ops
+        # Handle timestamp robustly across mixed formats and timezones
         ts = df["Complete Timestamp"]
-        if ts.dtype == 'object':
-            # Typical string timestamps with slashes
-            df["Complete Timestamp"] = ts.astype(str).str.replace("/", "-", regex=False)
-            df["Complete Timestamp"] = pd.to_datetime(df["Complete Timestamp"], dayfirst=True, errors='coerce')
-        else:
-            # Could be datetime64, int, float, or mixed; convert safely
+        # Normalize obvious separators first
+        ts_norm = ts.astype(str).str.replace("/", "-", regex=False)
+        parsed = None
+        # Try pandas mixed-format parsing (pandas >=2.0)
+        try:
+            parsed = pd.to_datetime(ts_norm, format='mixed', utc=True, errors='coerce')
+        except Exception:
+            parsed = None
+        if parsed is None or getattr(parsed, 'isna', lambda: False)().any():
+            # Fallback 1: generic inference with utc
             try:
-                df["Complete Timestamp"] = pd.to_datetime(ts, errors='coerce')
+                parsed = pd.to_datetime(ts_norm, utc=True, errors='coerce')
             except Exception:
-                # Fallback: cast to string then parse with dayfirst heuristic
-                df["Complete Timestamp"] = pd.to_datetime(ts.astype(str), dayfirst=True, errors='coerce')
+                parsed = None
+        if parsed is None or parsed.isna().all():
+            # Fallback 2: dayfirst heuristic without UTC
+            try:
+                parsed = pd.to_datetime(ts_norm, dayfirst=True, errors='coerce')
+            except Exception:
+                parsed = None
+        df["Complete Timestamp"] = parsed
         # Drop rows with unparseable timestamps
         before = len(df)
         df = df.dropna(subset=["Complete Timestamp"]).reset_index(drop=True)
@@ -85,7 +95,7 @@ class CanonicalLogsProcessor:
         if sort_temporally:
             df.sort_values(by=["Complete Timestamp"], inplace=True)
         
-        # Dataset-specific attribute handling: Road Traffic Fine
+        # Dataset-specific attribute handling: Traffic Fines
         # If 'vehicleClass' exists, forward-fill per case so it's available on all events.
         if "vehicleClass" in df.columns and "Case ID" in df.columns:
             try:

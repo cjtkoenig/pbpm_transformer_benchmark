@@ -15,10 +15,10 @@ data:
 
   max_prefix_length: 50
   attribute_mode: minimal      # minimal (activities only) | extended (each model's speciality)
-  datasets: ["BPI_Challenge_2012", "Helpdesk", "Road_Traffic_Fine_Management_Process", "Sepsis Cases - Event Log", "Tourism"]
+  datasets: ["BPI_Challenge_2012", "Helpdesk", "Traffic_Fines", "Sepsis", "Tourism"]
 
 model:
-  name: process_transformer   # process_transformer | mtlformer | activity_only_lstm | shared_lstm | specialised_lstm | pgtnet
+  name: process_transformer   # process_transformer | mtlformer | activity_only_lstm | shared_lstm | specialised_lstm
   max_case_length: 50
   # Global defaults (may be overridden below per-model)
   embed_dim: 64
@@ -37,7 +37,7 @@ model:
 
 train:
   batch_size: 128
-  max_epochs: 3
+  max_epochs: 30
   learning_rate: null          # optional scalar override; if null, use train.learning_rates[model.name] when available
   learning_rates:              # per-model defaults
     process_transformer: 1e-2
@@ -45,7 +45,6 @@ train:
     shared_lstm: 1e-3
     specialised_lstm: 1e-3
     activity_only_lstm: 1e-3
-    pgtnet: 1e-3
   accelerator: auto            # auto | cpu | gpu | mps
   devices: 1
   early_stopping_patience: 3

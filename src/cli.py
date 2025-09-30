@@ -176,44 +176,8 @@ def main(config: DictConfig):
             raw_directory=project_root / config.data.path_raw,
             outputs_dir=outputs_dir
         )
-        # Special messaging for PGTNet plan-only mode
-        _model_name = str(getattr(config.model, 'name', 'process_transformer'))
-        _exec_flag = True
-        try:
-            # Prefer nested model.pgtnet.execute if present
-            if hasattr(config.model, 'pgtnet') and getattr(config.model.pgtnet, 'execute', None) is not None:
-                _exec_flag = bool(getattr(config.model.pgtnet, 'execute'))
-            elif _model_name == 'pgtnet':
-                _exec_flag = bool(getattr(config.model, 'execute', False))
-        except Exception:
-            _exec_flag = True
-        if _model_name == 'pgtnet' and not _exec_flag:
-            print(f"\n✓ Remaining Time Task plan generated (PGTNet plan-only)")
-            print("  Plan-only mode: no training/inference executed. Set model.pgtnet.execute=true to run.")
-            ds_list = list(getattr(config.data, 'datasets', []) or [])
-            if ds_list:
-                print(f"  Manifests: outputs/pgtnet/<dataset>/fold_*/run_manifest.json (e.g., outputs/pgtnet/{ds_list[0]}/)")
-                print(f"  Plan files: outputs/<dataset>/remaining_time/pgtnet/plan.json (e.g., outputs/{ds_list[0]}/remaining_time/pgtnet/plan.json)")
-            else:
-                print(f"  See outputs/pgtnet/ and outputs/<dataset>/remaining_time/pgtnet/plan.json for details.")
-        else:
-            # Detect PGTNet external failures if any and adjust messaging
-            if _model_name == 'pgtnet':
-                try:
-                    ds_results = list((results or {}).values())
-                    had_failures_any = any(bool(dr.get('had_failures')) for dr in ds_results)
-                except Exception:
-                    had_failures_any = False
-                if had_failures_any:
-                    print(f"\n✗ Remaining Time Task encountered errors in external PGTNet/GraphGPS calls")
-                    print(f"  See outputs/pgtnet/<dataset>/fold_*/ for logs and run_manifest.json (stderr/stdout logs per phase).")
-                    print(f"  Conversion phase logs (if convert failed): outputs/pgtnet/<dataset>/shared/convert.stderr.log")
-                else:
-                    print(f"\n✓ Remaining Time Task completed successfully")
-                    print(f"  Results saved to outputs/")
-            else:
-                print(f"\n✓ Remaining Time Task completed successfully")
-                print(f"  Results saved to outputs/")
+        print(f"\n✓ Remaining Time Task completed successfully")
+        print(f"  Results saved to outputs/")
     elif config.task == "multitask":
         from src.tasks.multitask import MultiTaskLearningTask
         task = MultiTaskLearningTask(config_dict)
@@ -239,7 +203,7 @@ def main(config: DictConfig):
     _model = str(config.model.name)
     if _model in {"process_transformer", "mtlformer", "activity_only_lstm"}:
         track = "minimal"
-    elif _model in {"shared_lstm", "specialised_lstm", "pgtnet"}:
+    elif _model in {"shared_lstm", "specialised_lstm"}:
         track = "extended"
     else:
         track = None

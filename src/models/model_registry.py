@@ -258,24 +258,6 @@ class ModelRegistry:
 model_registry = ModelRegistry()
 
 
-# Note: We register with a generic adapter placeholder (ProcessTransformerAdapter) but it is never used
-# in the PGTNet execution path.
-def pgtnet_factory(task: str, **kwargs):
-    if task != "remaining_time":
-        raise NotImplementedError("PGTNet supports only task='remaining_time'")
-    attr_mode = kwargs.get("attribute_mode", "extended")
-    if attr_mode != "extended":
-        raise NotImplementedError("PGTNet requires data.attribute_mode='extended'")
-    # External runner path returns a placeholder; orchestration lives in RemainingTimeTask
-    return None
-
-
-model_registry.register_model(
-    name="pgtnet",
-    framework="external",
-    factory=pgtnet_factory,
-    adapter=ProcessTransformerAdapter,
-)
 
 
 def create_model(name: str, task: str, **kwargs) -> Union[lightning.LightningModule, keras.Model]:

@@ -514,9 +514,8 @@ def load_event_log(file_path: str) -> pd.DataFrame:
         # Rename columns to standard format
         df = df.rename(columns={v: k for k, v in column_mapping.items()})
         
-        # Parse timestamps
-        df["time:timestamp"] = pd.to_datetime(df["time:timestamp"])
-        
+        # Leave timestamps as-is; downstream preprocessing handles robust parsing
+        # This avoids raising on mixed formats or timezone variants here.
         return df
     elif file_path.endswith(".xes"):
         # For XES files, we'll need to implement XES parsing

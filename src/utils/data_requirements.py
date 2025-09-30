@@ -55,7 +55,7 @@ def validate_datasets_or_raise(config: DictConfig, project_root: Path) -> None:
             # Let the task layer trigger preprocess as designed, but provide a clear error upfront
             raise FileNotFoundError(
                 f"Canonical processed data not found for dataset '{ds}' under {processed_dir}. "
-                f"Run: uv run python -m src.cli preprocess_action=force datasets=\"[{ds}]\""
+                f"Run: uv run python -m src.cli preprocess_action=force data.datasets=\"[\"{ds}\"]\""
             )
 
     # Extended models require extended columns
@@ -69,21 +69,7 @@ def validate_datasets_or_raise(config: DictConfig, project_root: Path) -> None:
                 raise RuntimeError(
                     "Extended attribute columns not found in canonical next_activity splits for dataset '"
                     + ds + "'. Please rebuild canonical processed data to include extended attributes.\n"
-                    "Try: uv run python -m src.cli preprocess_action=force datasets=\"[" + ds + "]\""
-                )
-
-    # PGTNet special case: requires canonical remaining_time splits present
-    if model == "pgtnet":
-        if task != "remaining_time":
-            raise ValueError("PGTNet is only supported for task=remaining_time.")
-        for ds in datasets:
-            base = processed_dir / ds / "splits" / "remaining_time"
-            if not base.exists() or not any(base.glob("fold_*/train.csv")):
-                raise FileNotFoundError(
-                    f"Canonical remaining_time splits not found for dataset '{ds}' at {base}. "
-                    f"Run canonical preprocessing or the remaining_time task once to create them:\n"
-                    f"  uv run python -m src.cli task=remaining_time data.datasets=\"[{ds}]\"\n"
-                    f"  or: uv run python -m src.cli preprocess_action=force datasets=\"[{ds}]\""
+                    "Try: uv run python -m src.cli preprocess_action=force data.datasets=\"[\"" + ds + "\"]\""
                 )
 
     # Minimal-mode models need nothing else; extended columns are optional and must be ignored by adapters
