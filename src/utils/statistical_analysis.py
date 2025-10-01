@@ -1165,7 +1165,7 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
 
     Accepted format (per file):
       - JSON list of records, each record with keys:
-        {"dataset": str, "task": str, "model": str, "metric": "accuracy|mae",
+        {"dataset": str, "task": str, "model": str, "metric": "mae",
          "score": float (optional if folds given),
          "fold": int (optional; if present with 'value', ingested as a single-fold score),
          "value": float (used with 'fold'),
@@ -1184,6 +1184,8 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
     summary_add: Dict[str, Dict[str, Dict[str, float]]] = {}
     fold_add: Dict[str, Dict[str, Dict[str, List[float]]]] = {}
     efficiency_add: Dict[str, Dict[str, Dict[str, Dict[str, float]]]] = {}
+    # Temporary accumulator for efficiency to average across multiple fold records
+    eff_accum: Dict[str, Dict[str, Dict[str, Dict[str, List[float]]]]] = {}
     ext_dir = _P(outputs_dir) / "external_results"
     if not ext_dir.exists():
         return summary_add, fold_add, efficiency_add
@@ -1213,18 +1215,17 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
                 sc = None
         else:
             sc = None
-        # Merge into fold_add
+        # Merge into fold_add (append across multiple records/files)
         if fvals:
-            fold_add.setdefault(dataset, {}).setdefault(task, {})[model_label] = fvals
-        # Derive summary score
-        if sc is None and fvals:
-            sc = float(np.mean(fvals))
-        if sc is None:
-            return
-        # Invert time tasks to match summary convention (higher is better)
-        if task in ("next_time", "remaining_time") and metric == "mae":
-            sc = -float(sc)
-        summary_add.setdefault(dataset, {}).setdefault(task, {})[model_label] = float(sc)
+            cur = fold_add.setdefault(dataset, {}).setdefault(task, {}).setdefault(model_label, [])
+            cur.extend(fvals)
+        # Only store explicit summary score when provided without folds;
+        # otherwise we'll compute from accumulated folds after ingestion
+        if sc is not None and not fvals:
+            # Invert time tasks to match summary convention (higher is better)
+            if task in ("next_time", "remaining_time") and metric == "mae":
+                sc = -float(sc)
+            summary_add.setdefault(dataset, {}).setdefault(task, {})[model_label] = float(sc)
 
     # Iterate only JSON files and only accept top-level lists of records
     for f in ext_dir.glob("*.json"):
@@ -1251,22 +1252,48 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
             if ds and t and model and metric:
                 label = _label(model, splits)
                 _add(ds, t, label, metric, score, folds)
-                # Optionally ingest efficiency metrics per record
+                # Optionally ingest efficiency metrics per record (accumulate to average later)
                 eff_keys = {
                     "train_time_seconds": rec.get("train_time_seconds", rec.get("training_time")),
                     "infer_time_seconds": rec.get("infer_time_seconds", rec.get("inference_time")),
                     "params": rec.get("params", rec.get("model_size")),
                 }
-                # If any efficiency field is present, record it
                 if any(v is not None for v in eff_keys.values()):
-                    eff_clean: Dict[str, float] = {}
+                    acc = eff_accum.setdefault(str(ds), {}).setdefault(str(t), {}).setdefault(label, {})
                     for k, v in eff_keys.items():
                         try:
                             if v is not None:
-                                eff_clean[k] = float(v)
+                                acc.setdefault(k, []).append(float(v))
                         except Exception:
                             continue
-                    if eff_clean:
-                        efficiency_add.setdefault(str(ds), {}).setdefault(str(t), {}).setdefault(label, {}).update(eff_clean)
+
+    # After ingestion: derive summary scores from accumulated folds if not explicitly provided
+    for ds, tasks in fold_add.items():
+        for t, models in tasks.items():
+            for label, fvals in models.items():
+                if not fvals:
+                    continue
+                # If there is no explicit score already, compute mean of folds
+                if float(len(fvals)) > 0 and label not in summary_add.get(ds, {}).get(t, {}):
+                    sc = float(np.mean(fvals))
+                    # Determine metric for inversion by inferring task
+                    metric = "mae"
+                    if t in ("next_time", "remaining_time") and metric == "mae":
+                        sc = -float(sc)
+                    summary_add.setdefault(ds, {}).setdefault(t, {})[label] = float(sc)
+
+    # Finalize efficiency: average accumulated metrics per model label
+    for ds, tasks in eff_accum.items():
+        for t, models in tasks.items():
+            for label, metrics in models.items():
+                eff_clean: Dict[str, float] = {}
+                for k, vals in metrics.items():
+                    try:
+                        if vals:
+                            eff_clean[k] = float(np.mean(vals))
+                    except Exception:
+                        continue
+                if eff_clean:
+                    efficiency_add.setdefault(ds, {}).setdefault(t, {}).setdefault(label, {}).update(eff_clean)
 
     return summary_add, fold_add, efficiency_add
