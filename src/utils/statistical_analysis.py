@@ -734,7 +734,7 @@ def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str,
                         if isinstance(s, (int, float)):
                             results[dataset][task][m] = float(s)
             # Merge external results if any
-            ext_summary, _ = _ingest_external_results(outputs_dir)
+            ext_summary, _, _ = _ingest_external_results(outputs_dir)
             for d, tmap in ext_summary.items():
                 for t, mmap in tmap.items():
                     results.setdefault(d, {}).setdefault(t, {}).update(mmap)
@@ -782,7 +782,7 @@ def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str,
                         score = -score
                     results.setdefault(dataset, {}).setdefault(task, {})[model] = score
     # Merge external results if any
-    ext_summary, _ = _ingest_external_results(outputs_dir)
+    ext_summary, _, _ = _ingest_external_results(outputs_dir)
     for d, tmap in ext_summary.items():
         for t, mmap in tmap.items():
             results.setdefault(d, {}).setdefault(t, {}).update(mmap)
@@ -875,6 +875,13 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
     outputs_dir = Path(outputs_dir)
     fold_scores = _collect_fold_scores(outputs_dir)
     summary = _load_summary_or_collect(outputs_dir)
+    # Ingest external additions (scores, folds, efficiency)
+    ext_summary, ext_folds, ext_eff = _ingest_external_results(outputs_dir)
+    # Merge external folds into fold_scores for CI computations
+    for d, tmap in ext_folds.items():
+        for tsk, mmap in tmap.items():
+            for model, folds in mmap.items():
+                fold_scores.setdefault(d, {}).setdefault(tsk, {})[model] = folds
     tasks = ["next_activity", "next_time", "remaining_time"] if task == "all" else [task]
 
     def filter_models_for_task(t: str, track: str) -> List[str]:
@@ -998,6 +1005,20 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                         eff_d[m] = eff
                     except Exception:
                         pass
+            # Merge external efficiency for this dataset/task
+            if d in ext_eff and t in ext_eff[d]:
+                for m_ext, eff_vals in ext_eff[d][t].items():
+                    # do not overwrite existing file-based entries; only fill missing or update
+                    cur = eff_d.setdefault(m_ext, {})
+                    for k, v in eff_vals.items():
+                        if k not in cur:
+                            cur[k] = v
+                        else:
+                            # keep existing; optionally ensure numeric
+                            try:
+                                cur[k] = float(cur[k])
+                            except Exception:
+                                pass
             if eff_d:
                 efficiency[d] = eff_d
         per_task["efficiency"] = efficiency
@@ -1133,7 +1154,7 @@ if __name__ == "__main__":
 
 
 
-def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dict[str, float]]], Dict[str, Dict[str, Dict[str, List[float]]]]]:
+def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dict[str, float]]], Dict[str, Dict[str, Dict[str, List[float]]]], Dict[str, Dict[str, Dict[str, Dict[str, float]]]]]: 
     """
     Load external benchmark results placed under outputs/external_results/ and return
     two structures:
@@ -1149,7 +1170,11 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
          "fold": int (optional; if present with 'value', ingested as a single-fold score),
          "value": float (used with 'fold'),
          "folds": [float, ...] (alternative to single fold records),
-         "splits": str (optional provenance label, e.g., 'canonical' or 'author')}
+         "splits": str (optional provenance label, e.g., 'canonical' or 'author'),
+         "train_time_seconds"|"training_time": float (optional),
+         "infer_time_seconds"|"inference_time": float (optional),
+         "params"|"model_size": float (optional)
+        }
 
     Any other file format or JSON structure is ignored.
     """
@@ -1158,9 +1183,10 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
 
     summary_add: Dict[str, Dict[str, Dict[str, float]]] = {}
     fold_add: Dict[str, Dict[str, Dict[str, List[float]]]] = {}
+    efficiency_add: Dict[str, Dict[str, Dict[str, Dict[str, float]]]] = {}
     ext_dir = _P(outputs_dir) / "external_results"
     if not ext_dir.exists():
-        return summary_add, fold_add
+        return summary_add, fold_add, efficiency_add
 
     def _label(model: str, splits: Optional[str]) -> str:
         s = f"{model} (external" + (f", splits={splits}" if splits else ")")
@@ -1223,6 +1249,24 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
                 folds = [rec.get("value")]
             score = rec.get("score")
             if ds and t and model and metric:
-                _add(ds, t, _label(model, splits), metric, score, folds)
+                label = _label(model, splits)
+                _add(ds, t, label, metric, score, folds)
+                # Optionally ingest efficiency metrics per record
+                eff_keys = {
+                    "train_time_seconds": rec.get("train_time_seconds", rec.get("training_time")),
+                    "infer_time_seconds": rec.get("infer_time_seconds", rec.get("inference_time")),
+                    "params": rec.get("params", rec.get("model_size")),
+                }
+                # If any efficiency field is present, record it
+                if any(v is not None for v in eff_keys.values()):
+                    eff_clean: Dict[str, float] = {}
+                    for k, v in eff_keys.items():
+                        try:
+                            if v is not None:
+                                eff_clean[k] = float(v)
+                        except Exception:
+                            continue
+                    if eff_clean:
+                        efficiency_add.setdefault(str(ds), {}).setdefault(str(t), {}).setdefault(label, {}).update(eff_clean)
 
-    return summary_add, fold_add
+    return summary_add, fold_add, efficiency_add
