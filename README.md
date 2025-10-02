@@ -166,6 +166,9 @@ This walkthrough shows the typical flow from setup to analysis. Adjust ACCELERAT
 
 2) Prepare data
 - Place CSVs in data/raw (e.g., data/raw/Helpdesk.csv)
+- or unlock them with git lfs:
+  - git lfs install
+  - git lfs pull (to fetch any LFS-tracked XES files)
 - Inspect what’s cached:
   - make preprocess_info
 - Force preprocessing for selected datasets (safe and fast for first time):
