@@ -31,11 +31,6 @@ env/
 lightning_logs/
 *.ckpt
 
-# Outputs and results
-outputs/
-results/
-checkpoints/
-
 # Data (keep structure, exclude processed data)
 data/processed/*
 !data/processed/.gitkeep
