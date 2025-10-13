@@ -370,6 +370,9 @@ def run_canonical_cross_validation(task_class, config: Dict[str, Any],
 def aggregate_cv_results(fold_results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Aggregate results from all CV folds.
+
+    Ensures all returned numbers are native Python types so JSON serialization
+    works across environments (avoids NumPy scalar types).
     
     Args:
         fold_results: List of results from each fold
@@ -378,22 +381,32 @@ def aggregate_cv_results(fold_results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     if not fold_results:
         return {}
-    
+
     # Extract metrics from all folds
     all_metrics = [fold['metrics'] for fold in fold_results]
-    
+
+    def _to_py_number(x: Any):
+        # Normalize numpy scalars to Python numbers
+        if isinstance(x, (np.floating,)):
+            return float(x)
+        if isinstance(x, (np.integer,)):
+            return int(x)
+        return x
+
     # Aggregate each metric
-    aggregated = {}
+    aggregated: Dict[str, Any] = {}
     for metric_name in all_metrics[0].keys():
-        if isinstance(all_metrics[0][metric_name], (int, float)):
-            values = [fold[metric_name] for fold in all_metrics]
-            aggregated[f"{metric_name}_mean"] = np.mean(values)
-            aggregated[f"{metric_name}_std"] = np.std(values)
-            aggregated[f"{metric_name}_min"] = np.min(values)
-            aggregated[f"{metric_name}_max"] = np.max(values)
-            aggregated[f"{metric_name}_values"] = values  # Keep individual fold values
+        first_val = all_metrics[0][metric_name]
+        if isinstance(first_val, (int, float, np.integer, np.floating)):
+            # Cast to float for aggregate reductions
+            values = [float(_to_py_number(fold[metric_name])) for fold in all_metrics]
+            aggregated[f"{metric_name}_mean"] = float(np.mean(values))
+            aggregated[f"{metric_name}_std"] = float(np.std(values))
+            aggregated[f"{metric_name}_min"] = float(np.min(values))
+            aggregated[f"{metric_name}_max"] = float(np.max(values))
+            aggregated[f"{metric_name}_values"] = [float(v) for v in values]
         else:
-            # For non-numeric metrics, just store all values
+            # For non-numeric metrics, just store all values (unchanged)
             aggregated[f"{metric_name}_all"] = [fold[metric_name] for fold in all_metrics]
-    
+
     return aggregated
