@@ -18,8 +18,24 @@ from enum import Enum
 from pathlib import Path
 import json
 
-import pymc as pm
-import arviz as az
+# Optional Bayesian stack; import lazily to avoid hard dependency during basic analyses
+pm = None  # type: ignore
+az = None  # type: ignore
+
+def _lazy_import_bayes():
+    global pm, az
+    if pm is not None and az is not None:
+        return
+    try:
+        import pymc as _pm  # type: ignore
+        import arviz as _az  # type: ignore
+        pm = _pm
+        az = _az
+    except Exception as e:
+        # Leave pm/az as None; hierarchical Bayes features will be disabled unless available
+        pm = None
+        az = None
+
 from scipy.optimize import minimize
 
 
@@ -91,12 +107,12 @@ class PlackettLuceModel:
         
         return log_likelihood
     
-    def fit(self, method: str = 'BFGS', max_iter: int = 1000) -> Dict[str, Any]:
+    def fit(self, method: str = 'L-BFGS-B', max_iter: int = 1000) -> Dict[str, Any]:
         """
         Fit Plackett-Luce model using maximum likelihood estimation.
         
         Args:
-            method: Optimization method ('BFGS', 'L-BFGS-B', etc.)
+            method: Optimization method ('L-BFGS-B', 'BFGS', etc.)
             max_iter: Maximum iterations for optimization
             
         Returns:
@@ -213,6 +229,13 @@ class HierarchicalBayesModel:
         if data is None:
             return {'error': 'No valid data for hierarchical model'}
         
+        _lazy_import_bayes()
+        if pm is None or az is None:
+            return {
+                'error': 'PyMC/ArviZ not available; install compatible versions (e.g., pymc>=5 and arviz) or pin numpy<2.0 to enable hierarchical Bayes.',
+                'model': None,
+                'data': data
+            }
         with pm.Model() as model:
             # Prior for global model effects
             model_effects = pm.Normal('model_effects', mu=0, sigma=1, shape=self.n_models)
@@ -423,7 +446,14 @@ class BenchmarkStatisticalAnalysis:
         # Add model information
         results['model_names'] = self.model_names
         results['n_datasets'] = len(ranking_data.rankings)
-        results['ranking_data'] = ranking_data
+        # Make ranking_data JSON-friendly
+        results['ranking_data'] = {
+            'model_names': ranking_data.model_names,
+            'dataset_names': ranking_data.dataset_names,
+            'direction': ranking_data.direction.value if hasattr(ranking_data.direction, 'value') else str(ranking_data.direction),
+            'rankings': ranking_data.rankings,
+            'n_rankings': len(ranking_data.rankings)
+        }
         
         return results
     
@@ -560,20 +590,6 @@ class BenchmarkStatisticalAnalysis:
                 except Exception as e:
                     warnings.warn(f"Wilcoxon test failed for {model1} vs {model2}: {e}")
         
-        # Apply multiple testing correction (Holm-Bonferroni)
-        if all_p_values:
-            _, corrected_p_values, _, _ = multipletests(
-                all_p_values, 
-                alpha=alpha, 
-                method='holm'
-            )
-            
-            # Update results with corrected p-values
-            for i, (model1, model2) in enumerate(test_pairs):
-                if (model1, model2) in pairwise_results:
-                    pairwise_results[(model1, model2)]['p_value_corrected'] = corrected_p_values[i]
-                    pairwise_results[(model1, model2)]['significant'] = corrected_p_values[i] < alpha
-        
         return pairwise_results
     
     def summary_statistics(self, task: str) -> Dict[str, Any]:
@@ -638,6 +654,13 @@ class BenchmarkStatisticalAnalysis:
         Returns:
             Dictionary with complete statistical analysis
         """
+        def _jsonify_pairwise(d: Dict[Tuple[str, str], Dict[str, float]]) -> Dict[str, Dict[str, float]]:
+            try:
+                return {f"{a}__vs__{b}": v for (a, b), v in d.items()}
+            except Exception:
+                # If it's already JSON-friendly or malformed, return as-is
+                return d  # type: ignore
+
         report = {
             'task': task,
             'task_direction': self.task_directions.get(task, RankingDirection.HIGHER_BETTER).value,
@@ -663,7 +686,8 @@ class BenchmarkStatisticalAnalysis:
         
         # Perform pairwise tests
         try:
-            report['pairwise_tests'] = self.pairwise_wilcoxon_tests(task)
+            pairwise = self.pairwise_wilcoxon_tests(task)
+            report['pairwise_tests'] = _jsonify_pairwise(pairwise)
         except Exception as e:
             warnings.warn(f"Pairwise tests failed: {e}")
         
@@ -717,7 +741,7 @@ class BenchmarkStatisticalAnalysis:
 def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str, float]]]:
     """Build {dataset: {task: {model: score}}} by reading outputs/analysis/summary.json
     if present; otherwise, collect from raw fold metrics mimicking analysis.summary.
-    For time tasks we assume higher-is-better scores already inverted in summary.json.
+    Time tasks remain on their natural scale (e.g., MAE; lower is better). No sign inversion.
     """
     results: Dict[str, Dict[str, Dict[str, float]]] = {}
     summary_path = outputs_dir / "analysis" / "summary.json"
@@ -733,6 +757,17 @@ def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str,
                         s = rec.get("score")
                         if isinstance(s, (int, float)):
                             results[dataset][task][m] = float(s)
+            # Augment with MTLFormer next_activity from multitask cv_metrics.json
+            try:
+                na_folds = _read_mtlformer_multitask_na_cv(outputs_dir)
+                for dname, accs in na_folds.items():
+                    if accs:
+                        mean_acc = float(np.mean(accs))
+                        results.setdefault(dname, {}).setdefault("next_activity", {})
+                        if "mtlformer" not in results[dname]["next_activity"]:
+                            results[dname]["next_activity"]["mtlformer"] = mean_acc
+            except Exception:
+                pass
             # Merge external results if any
             ext_summary, _, _ = _ingest_external_results(outputs_dir)
             for d, tmap in ext_summary.items():
@@ -778,9 +813,18 @@ def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str,
                             pass
                 if vals:
                     score = float(_np.mean(vals))
-                    if task in ("next_time", "remaining_time") and key == "mae":
-                        score = -score
                     results.setdefault(dataset, {}).setdefault(task, {})[model] = score
+    # Augment with MTLFormer next_activity from multitask cv_metrics.json
+    try:
+        na_folds = _read_mtlformer_multitask_na_cv(outputs_dir)
+        for dname, accs in na_folds.items():
+            if accs:
+                mean_acc = float(_np.mean(accs))
+                results.setdefault(dname, {}).setdefault("next_activity", {})
+                if "mtlformer" not in results[dname]["next_activity"]:
+                    results[dname]["next_activity"]["mtlformer"] = mean_acc
+    except Exception:
+        pass
     # Merge external results if any
     ext_summary, _, _ = _ingest_external_results(outputs_dir)
     for d, tmap in ext_summary.items():
@@ -788,6 +832,38 @@ def _load_summary_or_collect(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str,
             results.setdefault(d, {}).setdefault(t, {}).update(mmap)
     return results
 
+
+def _read_mtlformer_multitask_na_cv(outputs_dir: Path) -> Dict[str, List[float]]:
+    """Extract MTLFormer next_activity fold accuracies from multitask cv_metrics.json.
+    Scans outputs/<dataset>/multitask/mtlformer/cv_metrics.json and returns
+    {dataset: [acc_per_fold,...]}.
+    """
+    data: Dict[str, List[float]] = {}
+    base = Path(outputs_dir)
+    if not base.exists():
+        return data
+    for dataset_dir in base.iterdir():
+        if not dataset_dir.is_dir() or dataset_dir.name in ("checkpoints", "analysis"):
+            continue
+        cv_file = dataset_dir / "multitask" / "mtlformer" / "cv_metrics.json"
+        if not cv_file.exists():
+            continue
+        try:
+            obj = json.loads(cv_file.read_text())
+            folds = obj.get("fold_metrics", [])
+            accs: List[float] = []
+            for f in folds:
+                try:
+                    v = f.get("next_activity_accuracy")
+                    if isinstance(v, (int, float)):
+                        accs.append(float(v))
+                except Exception:
+                    continue
+            if accs:
+                data[dataset_dir.name] = accs
+        except Exception:
+            continue
+    return data
 
 def _collect_fold_scores(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str, List[float]]]]:
     """Collect per-fold scores for each dataset/task/model.
@@ -832,6 +908,16 @@ def _collect_fold_scores(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str, Lis
                             pass
                 if scores:
                     data.setdefault(dataset, {}).setdefault(task, {})[model] = scores
+    # Augment with MTLFormer next_activity folds from multitask cv_metrics.json
+    try:
+        na_folds = _read_mtlformer_multitask_na_cv(outputs_dir)
+        for ds, accs in na_folds.items():
+            if accs:
+                # Only fill if missing from the canonical next_activity path
+                if "next_activity" not in data.get(ds, {}) or "mtlformer" not in data.get(ds, {}).get("next_activity", {}):
+                    data.setdefault(ds, {}).setdefault("next_activity", {})["mtlformer"] = list(accs)
+    except Exception:
+        pass
     return data
 
 
@@ -936,22 +1022,42 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                 minimal_table[d] = row_min
             # Extended and uplift
             row_ext = {}
+            _ext_scale_noncomp = False
             for m in ext_models:
                 vals = fold_scores[d][t].get(m, [])
                 ci = _compute_ci(vals)
-                # compute minimal best mean for uplift
+                # compute minimal best mean for uplift when scales appear comparable
                 if minimal_table.get(d):
-                    min_best_mean = None
                     if higher_better:
                         min_best_mean = max(minimal_table[d][mm]["mean"] for mm in minimal_table[d])
-                        uplift = (ci["mean"] - min_best_mean) / (min_best_mean if min_best_mean else 1.0)
                     else:
                         min_best_mean = min(minimal_table[d][mm]["mean"] for mm in minimal_table[d])
-                        uplift = (min_best_mean - ci["mean"]) / (min_best_mean if min_best_mean else 1.0)
-                    ci["uplift_vs_minimal_best"] = uplift
+                    # scale comparability check: if magnitude differs by >5x, omit uplift
+                    try:
+                        a = float(ci.get("mean", float("nan")))
+                        b = float(min_best_mean)
+                        if np.isfinite(a) and np.isfinite(b) and a > 0 and b > 0:
+                            ratio = max(a, b) / min(a, b)
+                            scale_ok = ratio <= 5.0
+                        else:
+                            scale_ok = True
+                    except Exception:
+                        scale_ok = True
+                    if scale_ok and min_best_mean:
+                        if higher_better:
+                            uplift = (ci["mean"] - min_best_mean) / (min_best_mean if min_best_mean else 1.0)
+                        else:
+                            uplift = (min_best_mean - ci["mean"]) / (min_best_mean if min_best_mean else 1.0)
+                        ci["uplift_vs_minimal_best"] = uplift
+                    else:
+                        ci["uplift_vs_minimal_best"] = None
+                        ci["uplift_note"] = "Metric scale likely not comparable to Minimal-Track; uplift omitted."
+                        _ext_scale_noncomp = True
                 row_ext[m] = ci
             if row_ext:
                 extended_table[d] = row_ext
+                if _ext_scale_noncomp:
+                    per_task.setdefault("extended", {}).setdefault("scale_note", "Extended-Track metric scale differs from Minimal-Track for some models (e.g., normalized vs absolute MAE). Uplifts are omitted where non-comparable.")
         per_task["minimal"]["per_dataset"] = minimal_table
         per_task["extended"]["per_dataset"] = extended_table
 
@@ -962,7 +1068,7 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                 return {}
             task_results = {d: {t: {m: summary[d][t][m] for m in models if m in summary[d][t]}} for d in datasets if t in summary[d]}
             BA = BenchmarkStatisticalAnalysis(task_results, models, [d for d in datasets if t in summary[d]])
-            comp = BA.generate_comprehensive_report(t, include_plackett_luce=True, include_hierarchical_bayes=False)
+            comp = BA.generate_comprehensive_report(t, include_plackett_luce=True, include_hierarchical_bayes=True)
             # Limit pairwise tests to top models (min avg rank)
             avg = comp.get("average_ranks", {})
             if avg:
@@ -970,14 +1076,38 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                 top_models = [m for m, r in avg.items() if r == min_rank]
                 if len(top_models) >= 2:
                     BA_top = BenchmarkStatisticalAnalysis(task_results, top_models, [d for d in datasets if t in summary[d]])
+                    # jsonify pairwise_top_only keys for JSON safety
+                    top_pairwise = BA_top.pairwise_wilcoxon_tests(t)
+                    top_pairwise_json = {f"{a}__vs__{b}": v for (a, b), v in top_pairwise.items()} if isinstance(top_pairwise, dict) else top_pairwise
                     comp_top = {
-                        "pairwise_top_only": BA_top.pairwise_wilcoxon_tests(t)
+                        "pairwise_top_only": top_pairwise_json
                     }
                 else:
                     comp_top = {"pairwise_top_only": {}}
             else:
                 comp_top = {"pairwise_top_only": {}}
             comp.update(comp_top)
+            # Dataset inclusion/exclusion details for transparency
+            try:
+                rd = BA._get_rankings_for_task(t)
+                included = list(rd.dataset_names)
+            except Exception:
+                included = [d for d in datasets if t in summary.get(d, {})]
+            excluded = [d for d in datasets if d not in included]
+            excl_info = []
+            for d in excluded:
+                missing = [m for m in models if m not in summary.get(d, {}).get(t, {})]
+                reason = "missing scores for models: " + ", ".join(missing) if missing else "dataset lacks complete results across minimal models"
+                # Cross-check folds presence
+                has_folds = bool(fold_scores.get(d, {}).get(t, {}))
+                if not has_folds:
+                    reason += "; no fold metrics found"
+                excl_info.append({"dataset": d, "reason": reason, "missing_models": missing})
+            comp["dataset_selection"] = {
+                "included": included,
+                "excluded": excl_info,
+                "counts": {"included": len(included), "total_with_task": len(datasets)}
+            }
             return comp
 
         per_task["rankings"]["minimal"] = build_stats(min_models)
@@ -987,7 +1117,7 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
         else:
             per_task["rankings"]["extended"] = {"note": "No Extended-Track models for this task."}
 
-        # Efficiency: attempt to read optional efficiency.json at model level per dataset
+        # Efficiency: derive from cv_results.json (means across folds).
         efficiency = {}
         for d in datasets:
             eff_d = {}
@@ -998,30 +1128,102 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                 mdir = base / m
                 if not mdir.exists():
                     continue
-                efile = mdir / "efficiency.json"
-                if efile.exists():
+                cvfile = mdir / "cv_results.json"
+                eff = {}
+                if cvfile.exists():
                     try:
-                        eff = json.loads(efile.read_text())
-                        eff_d[m] = eff
+                        obj = json.loads(cvfile.read_text())
+                        cv = obj.get("cv_summary", {}) or {}
+                        # Prefer cv_summary means
+                        def _get_mean(key):
+                            v = cv.get(f"{key}_mean")
+                            if isinstance(v, (int, float)):
+                                return float(v)
+                            return None
+                        tt = _get_mean("train_time_sec")
+                        it = _get_mean("infer_time_sec")
+                        pc = _get_mean("param_count")
+                        ep = _get_mean("epochs_run")
+                        # Fallback to compute from fold_results if needed
+                        if any(x is None for x in (tt, it, pc, ep)):
+                            folds = obj.get("fold_results", []) or []
+                            tt_vals = []; it_vals = []; pc_vals = []; ep_vals = []
+                            for fr in folds:
+                                md = (fr or {}).get("metrics", {}) or {}
+                                try:
+                                    if isinstance(md.get("train_time_sec"), (int, float)): tt_vals.append(float(md["train_time_sec"]))
+                                except Exception: pass
+                                try:
+                                    if isinstance(md.get("infer_time_sec"), (int, float)): it_vals.append(float(md["infer_time_sec"]))
+                                except Exception: pass
+                                try:
+                                    if isinstance(md.get("param_count"), (int, float)): pc_vals.append(float(md["param_count"]))
+                                except Exception: pass
+                                try:
+                                    if isinstance(md.get("epochs_run"), (int, float)): ep_vals.append(float(md["epochs_run"]))
+                                except Exception: pass
+                            import numpy as _np
+                            if tt is None and tt_vals: tt = float(_np.mean(tt_vals))
+                            if it is None and it_vals: it = float(_np.mean(it_vals))
+                            if pc is None and pc_vals: pc = float(_np.mean(pc_vals))
+                            if ep is None and ep_vals: ep = float(_np.mean(ep_vals))
+                        if tt is not None: eff["train_time_seconds"] = tt
+                        if it is not None: eff["infer_time_seconds"] = it
+                        if pc is not None: eff["params"] = int(round(pc))
+                        if ep is not None: eff["epochs"] = int(round(ep))
                     except Exception:
                         pass
-            # Merge external efficiency for this dataset/task
-            if d in ext_eff and t in ext_eff[d]:
-                for m_ext, eff_vals in ext_eff[d][t].items():
-                    # do not overwrite existing file-based entries; only fill missing or update
-                    cur = eff_d.setdefault(m_ext, {})
-                    for k, v in eff_vals.items():
-                        if k not in cur:
-                            cur[k] = v
-                        else:
-                            # keep existing; optionally ensure numeric
-                            try:
-                                cur[k] = float(cur[k])
-                            except Exception:
-                                pass
+                # If any efficiency fields found, record
+                if eff:
+                    eff_d[m] = eff
             if eff_d:
                 efficiency[d] = eff_d
         per_task["efficiency"] = efficiency
+
+        # Efficiency summary (median across datasets) for Minimal-Track models
+        eff_summary_min: Dict[str, Dict[str, Any]] = {}
+        for m in min_models:
+            vals_tt: List[float] = []
+            vals_it: List[float] = []
+            vals_p: List[float] = []
+            vals_ep: List[float] = []
+            for d, emap in efficiency.items():
+                e = emap.get(m)
+                if not isinstance(e, dict):
+                    continue
+                try:
+                    if "train_time_seconds" in e and e["train_time_seconds"] is not None:
+                        vals_tt.append(float(e["train_time_seconds"]))
+                except Exception:
+                    pass
+                try:
+                    if "infer_time_seconds" in e and e["infer_time_seconds"] is not None:
+                        vals_it.append(float(e["infer_time_seconds"]))
+                except Exception:
+                    pass
+                try:
+                    if "params" in e and e["params"] is not None:
+                        vals_p.append(float(e["params"]))
+                except Exception:
+                    pass
+                try:
+                    if "epochs" in e and e["epochs"] is not None:
+                        vals_ep.append(float(e["epochs"]))
+                except Exception:
+                    pass
+            if any([vals_tt, vals_it, vals_p, vals_ep]):
+                from statistics import median
+                eff_summary_min[m] = {
+                    "median_train_time_seconds": float(median(vals_tt)) if vals_tt else None,
+                    "median_infer_time_seconds": float(median(vals_it)) if vals_it else None,
+                    "median_params": float(median(vals_p)) if vals_p else None,
+                    "median_epochs": float(median(vals_ep)) if vals_ep else None,
+                    "n_datasets": max(len(vals_tt), len(vals_it), len(vals_p), len(vals_ep))
+                }
+        if eff_summary_min:
+            per_task["efficiency_summary"] = {"minimal": eff_summary_min}
+        else:
+            per_task["efficiency_summary"] = {"minimal": {}}
 
         # Stratified: attempt to read optional stratified_metrics.json per model
         stratified = {}
@@ -1051,16 +1253,29 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
 
         report["per_task"][t] = per_task
 
-    # Global MTLFormer efficiency comparison: one multitask vs sum of three single-task runs
+    # Global MTLFormer efficiency comparison: read multitask cv_metrics.json and sum single-task cv_results.json
     mtl_eff: Dict[str, Any] = {}
     for d in sorted(summary.keys()):
-        multi_path = outputs_dir / d / "multitask" / "mtlformer" / "efficiency.json"
-        multi = None
-        if multi_path.exists():
+        # Multitask MTLFormer
+        multi: Dict[str, Any] = {}
+        cvm = outputs_dir / d / "multitask" / "mtlformer" / "cv_metrics.json"
+        if cvm.exists():
             try:
-                multi = json.loads(multi_path.read_text())
+                obj = json.loads(cvm.read_text())
+                cv = (obj or {}).get("cv_summary", {}) or {}
+                def _get_mean(k: str):
+                    v = cv.get(f"{k}_mean")
+                    return float(v) if isinstance(v, (int, float)) else None
+                tt = _get_mean("train_time_sec")
+                it = _get_mean("infer_time_sec")
+                pc = _get_mean("param_count")
+                ep = _get_mean("epochs_run")
+                if tt is not None: multi["train_time_seconds"] = tt
+                if it is not None: multi["infer_time_seconds"] = it
+                if pc is not None: multi["params"] = int(round(pc))
+                if ep is not None: multi["epochs"] = int(round(ep))
             except Exception:
-                multi = None
+                pass
         # Sum single-task runs across NA/NET/RT using process_transformer primarily
         single_sum = {"train_time_seconds": 0.0, "infer_time_seconds": 0.0, "params": None, "count": 0}
         single_tasks = ["next_activity", "next_time", "remaining_time"]
@@ -1068,31 +1283,31 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
             base = outputs_dir / d / tsk
             if not base.exists():
                 continue
-            # prefer process_transformer; fallback to any minimal
+            # prefer process_transformer; fallback to any minimal with cv_results.json
             candidates = ["process_transformer", "activity_only_lstm"]
-            found = None
+            found_dir: Optional[Path] = None
             for cand in candidates:
-                efile = base / cand / "efficiency.json"
-                if efile.exists():
-                    found = efile
+                if (base / cand / "cv_results.json").exists():
+                    found_dir = base / cand
                     break
-            if not found:
+            if not found_dir:
                 # last resort: try any model in dir
                 for mdir in base.iterdir():
-                    if mdir.is_dir():
-                        efile = mdir / "efficiency.json"
-                        if efile.exists():
-                            found = efile
-                            break
-            if found:
+                    if mdir.is_dir() and (mdir / "cv_results.json").exists():
+                        found_dir = mdir
+                        break
+            if found_dir:
                 try:
-                    eff = json.loads(found.read_text())
-                    single_sum["train_time_seconds"] += float(eff.get("train_time_seconds", 0.0))
-                    single_sum["infer_time_seconds"] += float(eff.get("infer_time_seconds", 0.0))
-                    # params not additive; store max across single runs for reference
-                    p = eff.get("params")
+                    obj = json.loads((found_dir / "cv_results.json").read_text())
+                    cv = obj.get("cv_summary", {}) or {}
+                    def _gm(k: str):
+                        v = cv.get(f"{k}_mean")
+                        return float(v) if isinstance(v, (int, float)) else 0.0
+                    single_sum["train_time_seconds"] += _gm("train_time_sec")
+                    single_sum["infer_time_seconds"] += _gm("infer_time_sec")
+                    p = cv.get("param_count_mean")
                     if isinstance(p, (int, float)):
-                        single_sum["params"] = max(int(p), int(single_sum["params"])) if single_sum["params"] is not None else int(p)
+                        single_sum["params"] = max(int(round(p)), int(single_sum["params"])) if single_sum["params"] is not None else int(round(p))
                     single_sum["count"] += 1
                 except Exception:
                     pass
@@ -1101,56 +1316,20 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                 "multitask_mtlformer": multi or {},
                 "single_task_sum": single_sum,
                 "comparison": {
-                    "train_time_ratio_multi_vs_sum": (float(multi.get("train_time_seconds", 0.0)) / single_sum["train_time_seconds"]) if (multi and single_sum["train_time_seconds"]) else None,
-                    "infer_time_ratio_multi_vs_sum": (float(multi.get("infer_time_seconds", 0.0)) / single_sum["infer_time_seconds"]) if (multi and single_sum["infer_time_seconds"]) else None
+                    "train_time_ratio_multi_vs_sum": ((multi.get("train_time_seconds") or 0.0) / single_sum["train_time_seconds"]) if (single_sum["train_time_seconds"]) else None,
+                    "infer_time_ratio_multi_vs_sum": ((multi.get("infer_time_seconds") or 0.0) / single_sum["infer_time_seconds"]) if (single_sum["infer_time_seconds"]) else None
                 }
             }
     report["mtlformer_efficiency"] = mtl_eff
 
     # General notes
-    report["notes"]["inference"] = "Inferential statistics (Plackett–Luce, Bayesian tests, non-parametric tests) are restricted to the Minimal-Track. Extended-Track results are descriptive with uplifts vs best minimal model."
+    report["notes"]["inference"] = "Inferential statistics (Plackett–Luce, Bayesian tests, non-parametric tests) are reported for the Minimal-Track. Extended-Track results are descriptive; where metric scales are non-comparable (e.g., normalized vs absolute MAE), uplifts are omitted and a note is added."
+    report["notes"]["ci_method"] = "Per-dataset 95% t-based confidence intervals computed over cross-validation folds (n≈5). Accuracy: higher is better. Time tasks: MAE (lower is better)."
+    report["notes"]["dataset_exclusion_criteria"] = "A dataset contributes to average ranks only if all compared Minimal-Track models have valid scores. Datasets with missing model scores or missing fold metrics are excluded and listed under dataset_selection."
 
     return report
 
 
-if __name__ == "__main__":
-    import argparse, json
-    from pathlib import Path
-    ap = argparse.ArgumentParser(description="Statistical analysis CLI: per-task full report or thesis-aligned report")
-    ap.add_argument("--task", choices=["next_activity", "next_time", "remaining_time", "all"], default="all", help="Task to analyze (for full report) or 'all'")
-    ap.add_argument("--outputs", default="outputs", help="Path to outputs directory")
-    ap.add_argument("--no-pl", dest="pl", action="store_false", help="Disable Plackett–Luce fit (full report mode)")
-    ap.add_argument("--no-hb", dest="hb", action="store_false", help="Disable Hierarchical Bayes fit (full report mode)")
-    ap.add_argument("--thesis", action="store_true", help="Generate thesis-aligned report across tasks (Minimal vs Extended, uplifts, MTLFormer efficiency)")
-    ap.set_defaults(pl=True, hb=True)
-    args = ap.parse_args()
-
-    outputs_dir = Path(args.outputs)
-
-    out_dir = outputs_dir / "analysis"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.thesis:
-        thesis = generate_thesis_report(outputs_dir, task=args.task)
-        out_path = out_dir / ("thesis_report.json" if args.task == "all" else f"thesis_report_{args.task}.json")
-        out_path.write_text(json.dumps(thesis, indent=2))
-        print(f"Saved thesis-aligned report to {out_path}")
-    else:
-        data = _load_summary_or_collect(outputs_dir)
-        # Collect model and dataset names where this task appears
-        datasets = sorted([d for d, tmap in data.items() if args.task in tmap])
-        models = sorted({m for d in datasets for m in data[d][args.task].keys()})
-        if not datasets or not models:
-            print(f"No data found for task {args.task} under {outputs_dir}")
-            raise SystemExit(1)
-
-        # Build results dict limited to the selected task
-        results = {d: {args.task: data[d][args.task]} for d in datasets}
-        BA = BenchmarkStatisticalAnalysis(results, models, datasets)
-        report = BA.generate_comprehensive_report(args.task, include_plackett_luce=args.pl, include_hierarchical_bayes=args.hb)
-        out_path = out_dir / f"full_report_{args.task}.json"
-        out_path.write_text(json.dumps(report, indent=2))
-        print(f"Saved full statistical report to {out_path}")
 
 
 
@@ -1159,7 +1338,7 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
     Load external benchmark results placed under outputs/external_results/ and return
     two structures:
       - (summary_add): {dataset: {task: {model_label: score}}} where score follows
-        _load_summary_or_collect conventions (accuracy higher-is-better; time tasks inverted sign)
+        natural metric direction (accuracy higher-is-better; time tasks lower-is-better)
       - (fold_add): {dataset: {task: {model_label: [fold_scores...]}}} where fold scores
         are raw (accuracy or MAE as-is) for inclusion in confidence intervals.
 
@@ -1222,9 +1401,6 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
         # Only store explicit summary score when provided without folds;
         # otherwise we'll compute from accumulated folds after ingestion
         if sc is not None and not fvals:
-            # Invert time tasks to match summary convention (higher is better)
-            if task in ("next_time", "remaining_time") and metric == "mae":
-                sc = -float(sc)
             summary_add.setdefault(dataset, {}).setdefault(task, {})[model_label] = float(sc)
 
     # Iterate only JSON files and only accept top-level lists of records
@@ -1276,10 +1452,6 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
                 # If there is no explicit score already, compute mean of folds
                 if float(len(fvals)) > 0 and label not in summary_add.get(ds, {}).get(t, {}):
                     sc = float(np.mean(fvals))
-                    # Determine metric for inversion by inferring task
-                    metric = "mae"
-                    if t in ("next_time", "remaining_time") and metric == "mae":
-                        sc = -float(sc)
                     summary_add.setdefault(ds, {}).setdefault(t, {})[label] = float(sc)
 
     # Finalize efficiency: average accumulated metrics per model label
@@ -1297,3 +1469,78 @@ def _ingest_external_results(outputs_dir: Path) -> Tuple[Dict[str, Dict[str, Dic
                     efficiency_add.setdefault(ds, {}).setdefault(t, {}).setdefault(label, {}).update(eff_clean)
 
     return summary_add, fold_add, efficiency_add
+
+
+if __name__ == "__main__":
+    import argparse, json
+    from pathlib import Path
+
+    def _json_default(o):
+        try:
+            import numpy as _np
+        except Exception:
+            _np = None  # type: ignore
+        try:
+            import pandas as _pd  # type: ignore
+        except Exception:
+            _pd = None  # type: ignore
+        # numpy scalars
+        if _np is not None and isinstance(o, (_np.integer, _np.floating)):
+            return o.item()
+        # numpy arrays
+        if _np is not None and isinstance(o, _np.ndarray):
+            return o.tolist()
+        # pandas
+        if _pd is not None:
+            if isinstance(o, _pd.Series):
+                return o.to_dict()
+            if isinstance(o, _pd.DataFrame):
+                return o.to_dict(orient="list")
+        # pathlib
+        if isinstance(o, Path):
+            return str(o)
+        # enums
+        try:
+            from enum import Enum as _Enum
+            if isinstance(o, _Enum):
+                return getattr(o, 'value', str(o))
+        except Exception:
+            pass
+        # fallback
+        return str(o)
+
+    ap = argparse.ArgumentParser(description="Statistical analysis CLI: per-task full report or thesis-aligned report")
+    ap.add_argument("--task", choices=["next_activity", "next_time", "remaining_time", "all"], default="all", help="Task to analyze (for full report) or 'all'")
+    ap.add_argument("--outputs", default="outputs", help="Path to outputs directory")
+    ap.add_argument("--no-pl", dest="pl", action="store_false", help="Disable Plackett–Luce fit (full report mode)")
+    ap.add_argument("--no-hb", dest="hb", action="store_false", help="Disable Hierarchical Bayes fit (full report mode)")
+    ap.add_argument("--thesis", action="store_true", help="Generate thesis-aligned report across tasks (Minimal vs Extended, uplifts, MTLFormer efficiency)")
+    ap.set_defaults(pl=True, hb=True)
+    args = ap.parse_args()
+
+    outputs_dir = Path(args.outputs)
+
+    out_dir = outputs_dir / "analysis"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.thesis:
+        thesis = generate_thesis_report(outputs_dir, task=args.task)
+        out_path = out_dir / ("thesis_report.json" if args.task == "all" else f"thesis_report_{args.task}.json")
+        out_path.write_text(json.dumps(thesis, indent=2, default=_json_default))
+        print(f"Saved thesis-aligned report to {out_path}")
+    else:
+        data = _load_summary_or_collect(outputs_dir)
+        # Collect model and dataset names where this task appears
+        datasets = sorted([d for d, tmap in data.items() if args.task in tmap])
+        models = sorted({m for d in datasets for m in data[d][args.task].keys()})
+        if not datasets or not models:
+            print(f"No data found for task {args.task} under {outputs_dir}")
+            raise SystemExit(1)
+
+        # Build results dict limited to the selected task
+        results = {d: {args.task: data[d][args.task]} for d in datasets}
+        BA = BenchmarkStatisticalAnalysis(results, models, datasets)
+        report = BA.generate_comprehensive_report(args.task, include_plackett_luce=args.pl, include_hierarchical_bayes=args.hb)
+        out_path = out_dir / f"full_report_{args.task}.json"
+        out_path.write_text(json.dumps(report, indent=2, default=_json_default))
+        print(f"Saved full statistical report to {out_path}")

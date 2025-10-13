@@ -171,6 +171,8 @@ class MultiTaskLearningTask:
                 restore_best_weights=self.config.get("train", {}).get("restore_best_weights", True)
             ))
 
+        import time
+        train_start = time.time()
         history = model.fit(
             [X1_tr, X2_tr, T_tr], [Ya_tr, Yn_tr, Yr_tr],
             validation_data=([X1_va, X2_va, T_va], [Ya_va, Yn_va, Yr_va]),
@@ -179,9 +181,12 @@ class MultiTaskLearningTask:
             callbacks=callbacks if callbacks else None,
             verbose=1
         )
+        train_time = float(time.time() - train_start)
 
         # Evaluate with consistent metrics
+        infer_start = time.time()
         preds = model.predict([X1_va, X2_va, T_va], verbose=0)
+        infer_time = float(time.time() - infer_start)
         pred_a, pred_nt, pred_rt = preds
 
         # Activity accuracy (argmax over logits)
@@ -201,6 +206,13 @@ class MultiTaskLearningTask:
         rt_mse = float(mean_squared_error(y_true_rt, y_hat_rt))
         rt_r2 = float(r2_score(y_true_rt, y_hat_rt))
 
+        # Determine epochs run from history
+        try:
+            h = getattr(history, 'history', {}) or {}
+            epochs_run = int(len(h.get('loss', []))) if h else None
+        except Exception:
+            epochs_run = None
+
         # Compose per-task metrics
         metrics = {
             'next_activity_accuracy': acc,
@@ -211,6 +223,9 @@ class MultiTaskLearningTask:
             'remaining_time_mse': rt_mse,
             'remaining_time_r2': rt_r2,
             'param_count': int(model.count_params()),
+            'train_time_sec': float(train_time),
+            'infer_time_sec': float(infer_time),
+            'epochs_run': epochs_run,
         }
         return metrics
 
@@ -264,6 +279,7 @@ class MultiTaskLearningTask:
                 'dataset_name': dataset_name,
             }, indent=2))
 
+            
             # Additionally, emit per-task reports to match single-task layout for comparability
             # Build per-task fold results and write fold-level metrics.json
             # Next Activity
@@ -272,7 +288,11 @@ class MultiTaskLearningTask:
                 fold_dir = outputs_dir / dataset_name / "next_activity" / model_name / f"fold_{i}"
                 fold_dir.mkdir(parents=True, exist_ok=True)
                 na_metrics = {
-                    'accuracy': float(fm['next_activity_accuracy'])
+                    'accuracy': float(fm['next_activity_accuracy']),
+                    'train_time_sec': float(fm.get('train_time_sec')) if fm.get('train_time_sec') is not None else None,
+                    'infer_time_sec': float(fm.get('infer_time_sec')) if fm.get('infer_time_sec') is not None else None,
+                    'param_count': int(fm.get('param_count')) if fm.get('param_count') is not None else None,
+                    'epochs_run': int(fm.get('epochs_run')) if fm.get('epochs_run') is not None else None,
                 }
                 (fold_dir / "metrics.json").write_text(json.dumps(na_metrics, indent=2))
                 na_fold_results.append({'fold_idx': i, 'metrics': na_metrics})
@@ -293,7 +313,11 @@ class MultiTaskLearningTask:
                 nt_metrics = {
                     'mae': float(fm['next_time_mae']),
                     'mse': float(fm['next_time_mse']),
-                    'r2': float(fm['next_time_r2'])
+                    'r2': float(fm['next_time_r2']),
+                    'train_time_sec': float(fm.get('train_time_sec')) if fm.get('train_time_sec') is not None else None,
+                    'infer_time_sec': float(fm.get('infer_time_sec')) if fm.get('infer_time_sec') is not None else None,
+                    'param_count': int(fm.get('param_count')) if fm.get('param_count') is not None else None,
+                    'epochs_run': int(fm.get('epochs_run')) if fm.get('epochs_run') is not None else None,
                 }
                 (fold_dir / "metrics.json").write_text(json.dumps(nt_metrics, indent=2))
                 nt_fold_results.append({'fold_idx': i, 'metrics': nt_metrics})
@@ -314,7 +338,11 @@ class MultiTaskLearningTask:
                 rt_metrics = {
                     'mae': float(fm['remaining_time_mae']),
                     'mse': float(fm['remaining_time_mse']),
-                    'r2': float(fm['remaining_time_r2'])
+                    'r2': float(fm['remaining_time_r2']),
+                    'train_time_sec': float(fm.get('train_time_sec')) if fm.get('train_time_sec') is not None else None,
+                    'infer_time_sec': float(fm.get('infer_time_sec')) if fm.get('infer_time_sec') is not None else None,
+                    'param_count': int(fm.get('param_count')) if fm.get('param_count') is not None else None,
+                    'epochs_run': int(fm.get('epochs_run')) if fm.get('epochs_run') is not None else None,
                 }
                 (fold_dir / "metrics.json").write_text(json.dumps(rt_metrics, indent=2))
                 rt_fold_results.append({'fold_idx': i, 'metrics': rt_metrics})

@@ -300,6 +300,13 @@ smoke_test_shared_lstm: dirs
 	@echo "=== Smoke: shared_lstm next_activity on Helpdesk (2 epochs, extended attrs) ==="; \
 	uv run python -m src.cli model.name=shared_lstm task=next_activity data.datasets="[\"Tourism\"]" data.attribute_mode=extended train.max_epochs=1;
 
+run_mtl_former_again: dirs
+	@echo "=== PBPM Benchmark: MTLFormer with efficiency metrics ==="; \
+	echo "Datasets: BPI_Challenge_2012, Helpdesk, Traffic_Fines, Sepsis, Tourism"; \
+	UV="uv run python -m src.cli"; \
+	DATASETS="[\"BPI_Challenge_2012\", \"Helpdesk\", \"Traffic_Fines\", \"Sepsis\", \"Tourism\"]"; \
+	echo "--- MTLFormer: multitask ---"; \
+	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
 
 # ===== Minimal Benchmark Run =====
 .PHONY: run_benchmark_minimal_mode
