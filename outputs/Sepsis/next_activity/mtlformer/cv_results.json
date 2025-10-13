@@ -1,0 +1,48 @@
+{
+  "fold_results": [
+    {
+      "fold_idx": 0,
+      "metrics": {
+        "accuracy": 0.2586269524155467
+      }
+    },
+    {
+      "fold_idx": 1,
+      "metrics": {
+        "accuracy": 0.2504190412336574
+      }
+    },
+    {
+      "fold_idx": 2,
+      "metrics": {
+        "accuracy": 0.26074799021321216
+      }
+    },
+    {
+      "fold_idx": 3,
+      "metrics": {
+        "accuracy": 0.2621786197564276
+      }
+    },
+    {
+      "fold_idx": 4,
+      "metrics": {
+        "accuracy": 0.2751159196290572
+      }
+    }
+  ],
+  "cv_summary": {
+    "accuracy_mean": 0.26141770464958014,
+    "accuracy_std": 0.007967778835015416,
+    "accuracy_min": 0.2504190412336574,
+    "accuracy_max": 0.2751159196290572,
+    "accuracy_values": [
+      0.2586269524155467,
+      0.2504190412336574,
+      0.26074799021321216,
+      0.2621786197564276,
+      0.2751159196290572
+    ]
+  },
+  "dataset_name": "Sepsis"
+}

@@ -1,0 +1,63 @@
+seed: 42
+task: multitask
+cv:
+  n_folds: 5
+  stratify: null
+  split_by_cases: true
+data:
+  path_raw: data/raw
+  path_processed: data/processed
+  end_of_case_token: <eoc>
+  max_prefix_length: 50
+  attribute_mode: minimal
+  datasets:
+  - BPI_Challenge_2012
+  - Helpdesk
+  - Traffic_Fines
+  - Sepsis
+  - Tourism
+model:
+  name: mtlformer
+  max_case_length: 50
+  embed_dim: 64
+  num_heads: 4
+  ff_dim: 256
+  per_model:
+    process_transformer:
+      embed_dim: 36
+      num_heads: 4
+      ff_dim: 64
+    mtlformer:
+      embed_dim: 36
+      num_heads: 4
+      ff_dim: 64
+train:
+  batch_size: 128
+  max_epochs: 30
+  learning_rate: null
+  learning_rates:
+    process_transformer: 0.01
+    mtlformer: 0.002
+    shared_lstm: 0.001
+    specialised_lstm: 0.001
+    activity_only_lstm: 0.001
+  accelerator: auto
+  devices: 1
+  early_stopping_patience: 3
+  early_stopping_monitor: val_loss
+  early_stopping_mode: min
+  early_stopping_min_delta: 0.001
+  restore_best_weights: true
+metrics:
+  next_activity:
+  - accuracy
+  - f1_score
+  time:
+  - mae
+  - rmse
+  - r2
+preprocess_action: null
+dataset_name: null
+force_preprocess: false
+analysis:
+  action: null

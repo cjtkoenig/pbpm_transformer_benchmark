@@ -1,0 +1,18 @@
+{
+  "val_loss": 0.4818357229232788,
+  "val_accuracy": 0.8446086645126343,
+  "accuracy": 0.8446086354190718,
+  "f1_score": 0.8065403981877329,
+  "train_time_sec": 83.24475407600403,
+  "infer_time_sec": 3.030521869659424,
+  "param_count": 202632,
+  "best_epoch": 13,
+  "epochs_run": 15,
+  "early_stopped": true,
+  "early_stopping": {
+    "monitor": "val_loss",
+    "mode": "min",
+    "min_delta": 0.001,
+    "patience": 3
+  }
+}

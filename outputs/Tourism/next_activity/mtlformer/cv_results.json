@@ -1,0 +1,48 @@
+{
+  "fold_results": [
+    {
+      "fold_idx": 0,
+      "metrics": {
+        "accuracy": 0.39402253195268394
+      }
+    },
+    {
+      "fold_idx": 1,
+      "metrics": {
+        "accuracy": 0.3458865655577806
+      }
+    },
+    {
+      "fold_idx": 2,
+      "metrics": {
+        "accuracy": 0.43210689268558616
+      }
+    },
+    {
+      "fold_idx": 3,
+      "metrics": {
+        "accuracy": 0.43641621429658567
+      }
+    },
+    {
+      "fold_idx": 4,
+      "metrics": {
+        "accuracy": 0.43416999429549347
+      }
+    }
+  ],
+  "cv_summary": {
+    "accuracy_mean": 0.408520439757626,
+    "accuracy_std": 0.03500167474520341,
+    "accuracy_min": 0.3458865655577806,
+    "accuracy_max": 0.43641621429658567,
+    "accuracy_values": [
+      0.39402253195268394,
+      0.3458865655577806,
+      0.43210689268558616,
+      0.43641621429658567,
+      0.43416999429549347
+    ]
+  },
+  "dataset_name": "Tourism"
+}

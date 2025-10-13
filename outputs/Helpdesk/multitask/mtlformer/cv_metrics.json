@@ -1,0 +1,145 @@
+{
+  "fold_metrics": [
+    {
+      "next_activity_accuracy": 0.61810551558753,
+      "next_time_mae": 165.5428466796875,
+      "next_time_mse": 53016.6328125,
+      "next_time_r2": 0.5589809417724609,
+      "remaining_time_mae": 8.633177757263184,
+      "remaining_time_mse": 109.5504150390625,
+      "remaining_time_r2": 0.19746410846710205,
+      "param_count": 139451
+    },
+    {
+      "next_activity_accuracy": 0.6320474777448071,
+      "next_time_mae": 159.12069702148438,
+      "next_time_mse": 51409.390625,
+      "next_time_r2": 0.5675243735313416,
+      "remaining_time_mae": 8.27337646484375,
+      "remaining_time_mse": 102.50206756591797,
+      "remaining_time_r2": 0.21555179357528687,
+      "param_count": 139523
+    },
+    {
+      "next_activity_accuracy": 0.7701317715959004,
+      "next_time_mae": 169.76409912109375,
+      "next_time_mse": 54055.5625,
+      "next_time_r2": 0.5382880568504333,
+      "remaining_time_mae": 8.64825439453125,
+      "remaining_time_mse": 113.22547912597656,
+      "remaining_time_r2": 0.19153493642807007,
+      "param_count": 139523
+    },
+    {
+      "next_activity_accuracy": 0.7799216159179982,
+      "next_time_mae": 169.15797424316406,
+      "next_time_mse": 56705.953125,
+      "next_time_r2": 0.532731294631958,
+      "remaining_time_mae": 8.536991119384766,
+      "remaining_time_mse": 110.36209106445312,
+      "remaining_time_r2": 0.17746776342391968,
+      "param_count": 139523
+    },
+    {
+      "next_activity_accuracy": 0.7717717717717718,
+      "next_time_mae": 167.15968322753906,
+      "next_time_mse": 55828.19921875,
+      "next_time_r2": 0.5427526235580444,
+      "remaining_time_mae": 8.790562629699707,
+      "remaining_time_mse": 119.04790496826172,
+      "remaining_time_r2": 0.13934963941574097,
+      "param_count": 139523
+    }
+  ],
+  "cv_summary": {
+    "next_activity_accuracy_mean": 0.7143956305236016,
+    "next_activity_accuracy_std": 0.073137129104921,
+    "next_activity_accuracy_min": 0.61810551558753,
+    "next_activity_accuracy_max": 0.7799216159179982,
+    "next_activity_accuracy_values": [
+      0.61810551558753,
+      0.6320474777448071,
+      0.7701317715959004,
+      0.7799216159179982,
+      0.7717717717717718
+    ],
+    "next_time_mae_mean": 166.14906005859376,
+    "next_time_mae_std": 3.8186074117481263,
+    "next_time_mae_min": 159.12069702148438,
+    "next_time_mae_max": 169.76409912109375,
+    "next_time_mae_values": [
+      165.5428466796875,
+      159.12069702148438,
+      169.76409912109375,
+      169.15797424316406,
+      167.15968322753906
+    ],
+    "next_time_mse_mean": 54203.14765625,
+    "next_time_mse_std": 1904.7049639055303,
+    "next_time_mse_min": 51409.390625,
+    "next_time_mse_max": 56705.953125,
+    "next_time_mse_values": [
+      53016.6328125,
+      51409.390625,
+      54055.5625,
+      56705.953125,
+      55828.19921875
+    ],
+    "next_time_r2_mean": 0.5480554580688477,
+    "next_time_r2_std": 0.013090126270549157,
+    "next_time_r2_min": 0.532731294631958,
+    "next_time_r2_max": 0.5675243735313416,
+    "next_time_r2_values": [
+      0.5589809417724609,
+      0.5675243735313416,
+      0.5382880568504333,
+      0.532731294631958,
+      0.5427526235580444
+    ],
+    "remaining_time_mae_mean": 8.57647247314453,
+    "remaining_time_mae_std": 0.17183055383798124,
+    "remaining_time_mae_min": 8.27337646484375,
+    "remaining_time_mae_max": 8.790562629699707,
+    "remaining_time_mae_values": [
+      8.633177757263184,
+      8.27337646484375,
+      8.64825439453125,
+      8.536991119384766,
+      8.790562629699707
+    ],
+    "remaining_time_mse_mean": 110.93759155273438,
+    "remaining_time_mse_std": 5.3744792802675985,
+    "remaining_time_mse_min": 102.50206756591797,
+    "remaining_time_mse_max": 119.04790496826172,
+    "remaining_time_mse_values": [
+      109.5504150390625,
+      102.50206756591797,
+      113.22547912597656,
+      110.36209106445312,
+      119.04790496826172
+    ],
+    "remaining_time_r2_mean": 0.18427364826202391,
+    "remaining_time_r2_std": 0.025571560608379576,
+    "remaining_time_r2_min": 0.13934963941574097,
+    "remaining_time_r2_max": 0.21555179357528687,
+    "remaining_time_r2_values": [
+      0.19746410846710205,
+      0.21555179357528687,
+      0.19153493642807007,
+      0.17746776342391968,
+      0.13934963941574097
+    ],
+    "param_count_mean": 139508.6,
+    "param_count_std": 28.8,
+    "param_count_min": 139451.0,
+    "param_count_max": 139523.0,
+    "param_count_values": [
+      139451.0,
+      139523.0,
+      139523.0,
+      139523.0,
+      139523.0
+    ]
+  },
+  "dataset_name": "Helpdesk"
+}

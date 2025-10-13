@@ -1,0 +1,62 @@
+[
+  {
+    "dataset": "BPIC12cycletimeprediction",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 0,
+    "value": 0.05142,
+    "train_time_seconds": 1446.406938733533,
+    "params": 224755.0,
+    "splits": "cv-kfold-5",
+    "run": "bpic2012-train"
+  },
+  {
+    "dataset": "BPIC12cycletimeprediction",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 1,
+    "value": 0.05115,
+    "train_time_seconds": 1593.5101368501782,
+    "params": 224755.0,
+    "splits": "cv-kfold-5",
+    "run": "bpic2012-train"
+  },
+  {
+    "dataset": "BPIC12cycletimeprediction",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 2,
+    "value": 0.05166,
+    "train_time_seconds": 1765.7702962402254,
+    "params": 224755.0,
+    "splits": "cv-kfold-5",
+    "run": "bpic2012-train"
+  },
+  {
+    "dataset": "BPIC12cycletimeprediction",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 3,
+    "value": 0.05116,
+    "train_time_seconds": 1449.3849849086255,
+    "params": 224755.0,
+    "splits": "cv-kfold-5",
+    "run": "bpic2012-train"
+  },
+  {
+    "dataset": "BPIC12cycletimeprediction",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 4,
+    "value": 0.05165,
+    "train_time_seconds": 1265.2127913609147,
+    "params": 224755.0,
+    "splits": "cv-kfold-5",
+    "run": "bpic2012-train"
+  }
+]

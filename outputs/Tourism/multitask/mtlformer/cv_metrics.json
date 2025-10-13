@@ -1,0 +1,145 @@
+{
+  "fold_metrics": [
+    {
+      "next_activity_accuracy": 0.39402253195268394,
+      "next_time_mae": 209.28895568847656,
+      "next_time_mse": 348422.75,
+      "next_time_r2": 0.2874782085418701,
+      "remaining_time_mae": 49.37870788574219,
+      "remaining_time_mse": 4992.62744140625,
+      "remaining_time_r2": 0.19988757371902466,
+      "param_count": 161468
+    },
+    {
+      "next_activity_accuracy": 0.3458865655577806,
+      "next_time_mae": 229.79306030273438,
+      "next_time_mse": 355042.0625,
+      "next_time_r2": 0.27524513006210327,
+      "remaining_time_mae": 50.694515228271484,
+      "remaining_time_mse": 4890.33935546875,
+      "remaining_time_r2": 0.20390111207962036,
+      "param_count": 161468
+    },
+    {
+      "next_activity_accuracy": 0.43210689268558616,
+      "next_time_mae": 212.52120971679688,
+      "next_time_mse": 343530.3125,
+      "next_time_r2": 0.28981804847717285,
+      "remaining_time_mae": 48.89470291137695,
+      "remaining_time_mse": 4824.119140625,
+      "remaining_time_r2": 0.2077309489250183,
+      "param_count": 161468
+    },
+    {
+      "next_activity_accuracy": 0.43641621429658567,
+      "next_time_mae": 205.4176483154297,
+      "next_time_mse": 347036.65625,
+      "next_time_r2": 0.28875309228897095,
+      "remaining_time_mae": 50.37049865722656,
+      "remaining_time_mse": 5047.34814453125,
+      "remaining_time_r2": 0.20696532726287842,
+      "param_count": 161468
+    },
+    {
+      "next_activity_accuracy": 0.43416999429549347,
+      "next_time_mae": 209.98031616210938,
+      "next_time_mse": 341521.21875,
+      "next_time_r2": 0.29682499170303345,
+      "remaining_time_mae": 49.9516716003418,
+      "remaining_time_mse": 4817.4892578125,
+      "remaining_time_r2": 0.2184222936630249,
+      "param_count": 161468
+    }
+  ],
+  "cv_summary": {
+    "next_activity_accuracy_mean": 0.408520439757626,
+    "next_activity_accuracy_std": 0.03500167474520341,
+    "next_activity_accuracy_min": 0.3458865655577806,
+    "next_activity_accuracy_max": 0.43641621429658567,
+    "next_activity_accuracy_values": [
+      0.39402253195268394,
+      0.3458865655577806,
+      0.43210689268558616,
+      0.43641621429658567,
+      0.43416999429549347
+    ],
+    "next_time_mae_mean": 213.40023803710938,
+    "next_time_mae_std": 8.506674549625508,
+    "next_time_mae_min": 205.4176483154297,
+    "next_time_mae_max": 229.79306030273438,
+    "next_time_mae_values": [
+      209.28895568847656,
+      229.79306030273438,
+      212.52120971679688,
+      205.4176483154297,
+      209.98031616210938
+    ],
+    "next_time_mse_mean": 347110.6,
+    "next_time_mse_std": 4662.508853183619,
+    "next_time_mse_min": 341521.21875,
+    "next_time_mse_max": 355042.0625,
+    "next_time_mse_values": [
+      348422.75,
+      355042.0625,
+      343530.3125,
+      347036.65625,
+      341521.21875
+    ],
+    "next_time_r2_mean": 0.28762389421463014,
+    "next_time_r2_std": 0.006985765848769378,
+    "next_time_r2_min": 0.27524513006210327,
+    "next_time_r2_max": 0.29682499170303345,
+    "next_time_r2_values": [
+      0.2874782085418701,
+      0.27524513006210327,
+      0.28981804847717285,
+      0.28875309228897095,
+      0.29682499170303345
+    ],
+    "remaining_time_mae_mean": 49.858019256591795,
+    "remaining_time_mae_std": 0.6525104105506665,
+    "remaining_time_mae_min": 48.89470291137695,
+    "remaining_time_mae_max": 50.694515228271484,
+    "remaining_time_mae_values": [
+      49.37870788574219,
+      50.694515228271484,
+      48.89470291137695,
+      50.37049865722656,
+      49.9516716003418
+    ],
+    "remaining_time_mse_mean": 4914.38466796875,
+    "remaining_time_mse_std": 91.55979541697796,
+    "remaining_time_mse_min": 4817.4892578125,
+    "remaining_time_mse_max": 5047.34814453125,
+    "remaining_time_mse_values": [
+      4992.62744140625,
+      4890.33935546875,
+      4824.119140625,
+      5047.34814453125,
+      4817.4892578125
+    ],
+    "remaining_time_r2_mean": 0.20738145112991332,
+    "remaining_time_r2_std": 0.0061719765096261755,
+    "remaining_time_r2_min": 0.19988757371902466,
+    "remaining_time_r2_max": 0.2184222936630249,
+    "remaining_time_r2_values": [
+      0.19988757371902466,
+      0.20390111207962036,
+      0.2077309489250183,
+      0.20696532726287842,
+      0.2184222936630249
+    ],
+    "param_count_mean": 161468.0,
+    "param_count_std": 0.0,
+    "param_count_min": 161468.0,
+    "param_count_max": 161468.0,
+    "param_count_values": [
+      161468.0,
+      161468.0,
+      161468.0,
+      161468.0,
+      161468.0
+    ]
+  },
+  "dataset_name": "Tourism"
+}
