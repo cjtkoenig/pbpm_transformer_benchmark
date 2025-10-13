@@ -955,7 +955,7 @@ def _compute_ci(values: List[float], confidence: float = 0.95) -> Dict[str, floa
 
 
 def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, Any]:
-    """Generate thesis-aligned reports per the user’s schema.
+    """Generate thesis-aligned reports.
     Returns a dict with keys: minimal, extended, efficiency, stratified, metadata.
     """
     outputs_dir = Path(outputs_dir)

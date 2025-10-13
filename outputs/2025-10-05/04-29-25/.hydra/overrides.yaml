@@ -1,4 +1,0 @@
-- model.name=mtlformer
-- task=multitask
-- data.datasets=["BPI_Challenge_2012", "Helpdesk", "Traffic_Fines", "Sepsis", "Tourism"]
-- data.attribute_mode=minimal

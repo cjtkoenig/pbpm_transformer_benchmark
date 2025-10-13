@@ -1,4 +1,0 @@
-- model.name=shared_lstm
-- task=next_activity
-- data.datasets=["BPI_Challenge_2012", "Helpdesk", "Traffic_Fines", "Sepsis", "Tourism"]
-- data.attribute_mode=extended
