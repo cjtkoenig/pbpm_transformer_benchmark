@@ -1,0 +1,112 @@
+{
+  "fold_results": [
+    {
+      "fold_idx": 0,
+      "metrics": {
+        "accuracy": 0.8045122824912267,
+        "train_time_sec": 574.8488111495972,
+        "infer_time_sec": 9.229903936386108,
+        "param_count": 139568,
+        "epochs_run": 8
+      }
+    },
+    {
+      "fold_idx": 1,
+      "metrics": {
+        "accuracy": 0.8003998098465364,
+        "train_time_sec": 633.7905366420746,
+        "infer_time_sec": 9.40928053855896,
+        "param_count": 139568,
+        "epochs_run": 9
+      }
+    },
+    {
+      "fold_idx": 2,
+      "metrics": {
+        "accuracy": 0.7949764864569283,
+        "train_time_sec": 355.03652834892273,
+        "infer_time_sec": 10.406866073608398,
+        "param_count": 139568,
+        "epochs_run": 5
+      }
+    },
+    {
+      "fold_idx": 3,
+      "metrics": {
+        "accuracy": 0.7991274335853,
+        "train_time_sec": 435.8177192211151,
+        "infer_time_sec": 8.950806856155396,
+        "param_count": 139568,
+        "epochs_run": 6
+      }
+    },
+    {
+      "fold_idx": 4,
+      "metrics": {
+        "accuracy": 0.8048557756699826,
+        "train_time_sec": 392.9230086803436,
+        "infer_time_sec": 8.946013927459717,
+        "param_count": 139352,
+        "epochs_run": 6
+      }
+    }
+  ],
+  "cv_summary": {
+    "accuracy_mean": 0.8007743576099948,
+    "accuracy_std": 0.003663277507258118,
+    "accuracy_min": 0.7949764864569283,
+    "accuracy_max": 0.8048557756699826,
+    "accuracy_values": [
+      0.8045122824912267,
+      0.8003998098465364,
+      0.7949764864569283,
+      0.7991274335853,
+      0.8048557756699826
+    ],
+    "train_time_sec_mean": 478.48332080841067,
+    "train_time_sec_std": 107.50504188873707,
+    "train_time_sec_min": 355.03652834892273,
+    "train_time_sec_max": 633.7905366420746,
+    "train_time_sec_values": [
+      574.8488111495972,
+      633.7905366420746,
+      355.03652834892273,
+      435.8177192211151,
+      392.9230086803436
+    ],
+    "infer_time_sec_mean": 9.388574266433716,
+    "infer_time_sec_std": 0.5385207864208011,
+    "infer_time_sec_min": 8.946013927459717,
+    "infer_time_sec_max": 10.406866073608398,
+    "infer_time_sec_values": [
+      9.229903936386108,
+      9.40928053855896,
+      10.406866073608398,
+      8.950806856155396,
+      8.946013927459717
+    ],
+    "param_count_mean": 139524.8,
+    "param_count_std": 86.4,
+    "param_count_min": 139352.0,
+    "param_count_max": 139568.0,
+    "param_count_values": [
+      139568.0,
+      139568.0,
+      139568.0,
+      139568.0,
+      139352.0
+    ],
+    "epochs_run_mean": 6.8,
+    "epochs_run_std": 1.469693845669907,
+    "epochs_run_min": 5.0,
+    "epochs_run_max": 9.0,
+    "epochs_run_values": [
+      8.0,
+      9.0,
+      5.0,
+      6.0,
+      6.0
+    ]
+  },
+  "dataset_name": "Traffic_Fines"
+}

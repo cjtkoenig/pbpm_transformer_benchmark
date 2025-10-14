@@ -1,0 +1,4 @@
+- model.name=process_transformer
+- task=next_time
+- data.datasets=["BPI_Challenge_2012", "Helpdesk", "Traffic_Fines", "Sepsis", "Tourism"]
+- data.attribute_mode=minimal

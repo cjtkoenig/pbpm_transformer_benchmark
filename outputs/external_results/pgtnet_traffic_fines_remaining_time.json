@@ -1,0 +1,62 @@
+[
+  {
+    "dataset": "Traffic_Fines",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 0,
+    "value": 0.0466,
+    "train_time_seconds": 461.1550979837775,
+    "params": 269215.0,
+    "splits": "cv-kfold-5",
+    "run": "trafficfines-train"
+  },
+  {
+    "dataset": "Traffic_Fines",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 1,
+    "value": 0.04837,
+    "train_time_seconds": 323.8433320764452,
+    "params": 269215.0,
+    "splits": "cv-kfold-5",
+    "run": "trafficfines-train"
+  },
+  {
+    "dataset": "Traffic_Fines",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 2,
+    "value": 0.04417,
+    "train_time_seconds": 513.2055409792811,
+    "params": 269215.0,
+    "splits": "cv-kfold-5",
+    "run": "trafficfines-train"
+  },
+  {
+    "dataset": "Traffic_Fines",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 3,
+    "value": 0.04591,
+    "train_time_seconds": 451.14024962857366,
+    "params": 269215.0,
+    "splits": "cv-kfold-5",
+    "run": "trafficfines-train"
+  },
+  {
+    "dataset": "Traffic_Fines",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 4,
+    "value": 0.04486,
+    "train_time_seconds": 505.5187470857054,
+    "params": 269215.0,
+    "splits": "cv-kfold-5",
+    "run": "trafficfines-train"
+  }
+]

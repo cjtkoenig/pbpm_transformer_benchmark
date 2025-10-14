@@ -1,0 +1,1884 @@
+{
+  "metadata": {
+    "tasks": [
+      "next_activity",
+      "next_time",
+      "remaining_time"
+    ]
+  },
+  "per_task": {
+    "next_activity": {
+      "minimal": {
+        "per_dataset": {
+          "BPI_Challenge_2012": {
+            "process_transformer": {
+              "mean": 0.7673575194259789,
+              "lower": 0.756131099872258,
+              "upper": 0.7785839389796997,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 0.6396363605929418,
+              "lower": 0.6224615627688125,
+              "upper": 0.6568111584170712,
+              "n": 5,
+              "rank": 3
+            },
+            "activity_only_lstm": {
+              "mean": 0.8271926163164366,
+              "lower": 0.8264859516266607,
+              "upper": 0.8278992810062125,
+              "n": 5,
+              "rank": 1
+            }
+          },
+          "Helpdesk": {
+            "process_transformer": {
+              "mean": 0.8304098615962863,
+              "lower": 0.817082798248996,
+              "upper": 0.8437369249435765,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 0.683000882009854,
+              "lower": 0.5743549226542998,
+              "upper": 0.7916468413654082,
+              "n": 5,
+              "rank": 3
+            },
+            "activity_only_lstm": {
+              "mean": 0.8391806147578592,
+              "lower": 0.8322350124242334,
+              "upper": 0.8461262170914851,
+              "n": 5,
+              "rank": 1
+            }
+          },
+          "Sepsis": {
+            "process_transformer": {
+              "mean": 0.4934115535669946,
+              "lower": 0.4463056385293727,
+              "upper": 0.5405174686046166,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 0.26023965605402105,
+              "lower": 0.22129119626980467,
+              "upper": 0.2991881158382374,
+              "n": 5,
+              "rank": 3
+            },
+            "activity_only_lstm": {
+              "mean": 0.6287887078484564,
+              "lower": 0.6119005753770678,
+              "upper": 0.6456768403198451,
+              "n": 5,
+              "rank": 1
+            }
+          },
+          "Tourism": {
+            "process_transformer": {
+              "mean": 0.5252331438293993,
+              "lower": 0.5161529437993627,
+              "upper": 0.534313343859436,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 0.3642158670536534,
+              "lower": 0.3221478731229799,
+              "upper": 0.4062838609843269,
+              "n": 5,
+              "rank": 3
+            },
+            "activity_only_lstm": {
+              "mean": 0.6055573123811593,
+              "lower": 0.6007844848190727,
+              "upper": 0.6103301399432459,
+              "n": 5,
+              "rank": 1
+            }
+          },
+          "Traffic_Fines": {
+            "process_transformer": {
+              "mean": 0.8128332595299274,
+              "lower": 0.8111895817076198,
+              "upper": 0.8144769373522349,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 0.8007743576099948,
+              "lower": 0.7956889131579908,
+              "upper": 0.8058598020619988,
+              "n": 5,
+              "rank": 3
+            },
+            "activity_only_lstm": {
+              "mean": 0.815955791967561,
+              "lower": 0.8149270332841638,
+              "upper": 0.8169845506509581,
+              "n": 5,
+              "rank": 1
+            }
+          }
+        }
+      },
+      "extended": {
+        "per_dataset": {
+          "BPI_Challenge_2012": {
+            "shared_lstm": {
+              "mean": 0.8324442752860908,
+              "lower": 0.8271655867244093,
+              "upper": 0.8377229638477722,
+              "n": 5,
+              "uplift_vs_minimal_best": 0.006348773992979162
+            },
+            "specialised_lstm": {
+              "mean": 0.842619156039202,
+              "lower": 0.839408803110849,
+              "upper": 0.845829508967555,
+              "n": 5,
+              "uplift_vs_minimal_best": 0.01864927154628289
+            }
+          },
+          "Helpdesk": {
+            "shared_lstm": {
+              "mean": 0.8520065379617063,
+              "lower": 0.845975385516812,
+              "upper": 0.8580376904066007,
+              "n": 5,
+              "uplift_vs_minimal_best": 0.01528386497291524
+            },
+            "specialised_lstm": {
+              "mean": 0.8515405893210065,
+              "lower": 0.8460161200961986,
+              "upper": 0.8570650585458144,
+              "n": 5,
+              "uplift_vs_minimal_best": 0.014728622594211977
+            }
+          },
+          "Sepsis": {
+            "shared_lstm": {
+              "mean": 0.6096696717217777,
+              "lower": 0.5314840595465828,
+              "upper": 0.6878552838969725,
+              "n": 5,
+              "uplift_vs_minimal_best": -0.030406137845730225
+            },
+            "specialised_lstm": {
+              "mean": 0.6426834167287987,
+              "lower": 0.6186703274103666,
+              "upper": 0.6666965060472307,
+              "n": 5,
+              "uplift_vs_minimal_best": 0.022097580167885305
+            }
+          },
+          "Tourism": {
+            "shared_lstm": {
+              "mean": 0.5898681959098878,
+              "lower": 0.582721340691989,
+              "upper": 0.5970150511277866,
+              "n": 5,
+              "uplift_vs_minimal_best": -0.025908557539465697
+            },
+            "specialised_lstm": {
+              "mean": 0.6220695821376316,
+              "lower": 0.6154004465054336,
+              "upper": 0.6287387177698297,
+              "n": 5,
+              "uplift_vs_minimal_best": 0.027267889296131467
+            }
+          },
+          "Traffic_Fines": {
+            "shared_lstm": {
+              "mean": 0.8155160366534904,
+              "lower": 0.8141934704693651,
+              "upper": 0.8168386028376157,
+              "n": 5,
+              "uplift_vs_minimal_best": -0.0005389450242275771
+            },
+            "specialised_lstm": {
+              "mean": 0.8157118122389916,
+              "lower": 0.8143435499263502,
+              "upper": 0.817080074551633,
+              "n": 5,
+              "uplift_vs_minimal_best": -0.00029901096477427344
+            }
+          }
+        }
+      },
+      "rankings": {
+        "minimal": {
+          "task": "next_activity",
+          "task_direction": "higher",
+          "average_ranks": {
+            "process_transformer": 2.0,
+            "mtlformer": 3.0,
+            "activity_only_lstm": 1.0
+          },
+          "friedman_test": {
+            "statistic": 10.0,
+            "p_value": 0.006737946999085468
+          },
+          "pairwise_tests": {
+            "process_transformer__vs__mtlformer": {
+              "statistic": 0.0,
+              "p_value": 0.0625,
+              "mean_difference": -1.0,
+              "model1_mean_rank": 2.0,
+              "model2_mean_rank": 3.0
+            },
+            "process_transformer__vs__activity_only_lstm": {
+              "statistic": 0.0,
+              "p_value": 0.0625,
+              "mean_difference": 1.0,
+              "model1_mean_rank": 2.0,
+              "model2_mean_rank": 1.0
+            },
+            "mtlformer__vs__activity_only_lstm": {
+              "statistic": 0.0,
+              "p_value": 0.0625,
+              "mean_difference": 2.0,
+              "model1_mean_rank": 3.0,
+              "model2_mean_rank": 1.0
+            }
+          },
+          "summary_statistics": {
+            "process_transformer": {
+              "mean": 0.6858490675897172,
+              "std": 0.1459425281786552,
+              "median": 0.7673575194259789,
+              "min": 0.4934115535669946,
+              "max": 0.8304098615962863,
+              "n_datasets": 5,
+              "cv": 0.21279102804869554
+            },
+            "mtlformer": {
+              "mean": 0.5495734246640931,
+              "std": 0.2035129388202059,
+              "median": 0.6396363605929418,
+              "min": 0.26023965605402105,
+              "max": 0.8007743576099948,
+              "n_datasets": 5,
+              "cv": 0.3703107349934103
+            },
+            "activity_only_lstm": {
+              "mean": 0.7433350086542945,
+              "std": 0.10353338143791467,
+              "median": 0.815955791967561,
+              "min": 0.6055573123811593,
+              "max": 0.8391806147578592,
+              "n_datasets": 5,
+              "cv": 0.13928226201177796
+            }
+          },
+          "plackett_luce": {
+            "strengths": [
+              0.0,
+              -10.0,
+              10.0
+            ],
+            "probabilities": [
+              4.5397868608866656e-05,
+              2.061060046209062e-09,
+              0.999954600070331
+            ],
+            "log_likelihood": -0.00045399929746739887,
+            "success": true,
+            "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+            "n_iterations": 12,
+            "model_names": [
+              "process_transformer",
+              "mtlformer",
+              "activity_only_lstm"
+            ],
+            "n_datasets": 5,
+            "ranking_data": {
+              "model_names": [
+                "process_transformer",
+                "mtlformer",
+                "activity_only_lstm"
+              ],
+              "dataset_names": [
+                "BPI_Challenge_2012",
+                "Helpdesk",
+                "Sepsis",
+                "Tourism",
+                "Traffic_Fines"
+              ],
+              "direction": "higher",
+              "rankings": [
+                [
+                  2,
+                  3,
+                  1
+                ],
+                [
+                  2,
+                  3,
+                  1
+                ],
+                [
+                  2,
+                  3,
+                  1
+                ],
+                [
+                  2,
+                  3,
+                  1
+                ],
+                [
+                  2,
+                  3,
+                  1
+                ]
+              ],
+              "n_rankings": 5
+            }
+          },
+          "hierarchical_bayes": {
+            "trace": "Inference data with groups:\n\t> posterior\n\t> sample_stats\n\t> observed_data",
+            "model_effects_summary": {
+              "mean": [
+                0.596,
+                0.46,
+                0.654
+              ],
+              "sd": [
+                0.207,
+                0.207,
+                0.207
+              ],
+              "hdi_3%": [
+                0.16,
+                0.036,
+                0.264
+              ],
+              "hdi_97%": [
+                0.962,
+                0.833,
+                1.06
+              ],
+              "mcse_mean": [
+                0.007,
+                0.007,
+                0.007
+              ],
+              "mcse_sd": [
+                0.005,
+                0.005,
+                0.005
+              ],
+              "ess_bulk": [
+                850.0,
+                838.0,
+                840.0
+              ],
+              "ess_tail": [
+                1000.0,
+                988.0,
+                1003.0
+              ],
+              "r_hat": [
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "dataset_effects_summary": {
+              "mean": [
+                0.173,
+                0.212,
+                -0.108,
+                -0.072,
+                0.237
+              ],
+              "sd": [
+                0.208,
+                0.208,
+                0.208,
+                0.209,
+                0.208
+              ],
+              "hdi_3%": [
+                -0.222,
+                -0.195,
+                -0.488,
+                -0.449,
+                -0.174
+              ],
+              "hdi_97%": [
+                0.571,
+                0.606,
+                0.313,
+                0.351,
+                0.627
+              ],
+              "mcse_mean": [
+                0.007,
+                0.007,
+                0.007,
+                0.007,
+                0.007
+              ],
+              "mcse_sd": [
+                0.005,
+                0.005,
+                0.005,
+                0.005,
+                0.005
+              ],
+              "ess_bulk": [
+                866.0,
+                864.0,
+                854.0,
+                851.0,
+                849.0
+              ],
+              "ess_tail": [
+                1011.0,
+                998.0,
+                1059.0,
+                969.0,
+                1092.0
+              ],
+              "r_hat": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "pairwise_differences": {
+              "process_transformer__vs__mtlformer": {
+                "mean_difference": 0.1363015304350518,
+                "std_difference": 0.0532829234281957,
+                "quantiles": [
+                  0.03208529302321758,
+                  0.10373223323942915,
+                  0.13536904422442816,
+                  0.16889953245870826,
+                  0.2424137298019871
+                ],
+                "prob_model1_better": 0.991625,
+                "credible_interval_95": [
+                  0.03208529302321758,
+                  0.2424137298019871
+                ],
+                "credible_interval_50": [
+                  0.10373223323942915,
+                  0.16889953245870826
+                ]
+              },
+              "process_transformer__vs__activity_only_lstm": {
+                "mean_difference": -0.05768033913075463,
+                "std_difference": 0.05252896784092632,
+                "quantiles": [
+                  -0.16239605567170087,
+                  -0.0899265036572326,
+                  -0.05752996160874452,
+                  -0.02627124359167468,
+                  0.045616413881452024
+                ],
+                "prob_model1_better": 0.116875,
+                "credible_interval_95": [
+                  -0.16239605567170087,
+                  0.045616413881452024
+                ],
+                "credible_interval_50": [
+                  -0.0899265036572326,
+                  -0.02627124359167468
+                ]
+              },
+              "mtlformer__vs__activity_only_lstm": {
+                "mean_difference": -0.1939818695658064,
+                "std_difference": 0.053638447236447416,
+                "quantiles": [
+                  -0.29820261689646044,
+                  -0.22739143093304848,
+                  -0.19434038343527887,
+                  -0.16059380791240685,
+                  -0.08927500960007076
+                ],
+                "prob_model1_better": 0.00125,
+                "credible_interval_95": [
+                  -0.29820261689646044,
+                  -0.08927500960007076
+                ],
+                "credible_interval_50": [
+                  -0.22739143093304848,
+                  -0.16059380791240685
+                ]
+              }
+            },
+            "model": "<pymc.model.core.Model object at 0x118850e10>",
+            "data": {
+              "values": [
+                0.7673575194259789,
+                0.6396363605929418,
+                0.8271926163164366,
+                0.8304098615962863,
+                0.683000882009854,
+                0.8391806147578592,
+                0.4934115535669946,
+                0.26023965605402105,
+                0.6287887078484564,
+                0.5252331438293993,
+                0.3642158670536534,
+                0.6055573123811593,
+                0.8128332595299274,
+                0.8007743576099948,
+                0.815955791967561
+              ],
+              "model_idx": [
+                0,
+                1,
+                2,
+                0,
+                1,
+                2,
+                0,
+                1,
+                2,
+                0,
+                1,
+                2,
+                0,
+                1,
+                2
+              ],
+              "dataset_idx": [
+                0,
+                0,
+                0,
+                1,
+                1,
+                1,
+                2,
+                2,
+                2,
+                3,
+                3,
+                3,
+                4,
+                4,
+                4
+              ]
+            }
+          },
+          "summary": {
+            "best_model": "activity_only_lstm",
+            "best_rank": 1.0,
+            "total_models": 3,
+            "valid_datasets": 5,
+            "total_datasets": 5
+          },
+          "pairwise_top_only": {},
+          "dataset_selection": {
+            "included": [
+              "BPI_Challenge_2012",
+              "Helpdesk",
+              "Sepsis",
+              "Tourism",
+              "Traffic_Fines"
+            ],
+            "excluded": [],
+            "counts": {
+              "included": 5,
+              "total_with_task": 5
+            }
+          }
+        },
+        "extended": {
+          "note": "Extended-Track is descriptive only. No Plackett\u2013Luce, Bayes, or pairwise significance tests run."
+        }
+      },
+      "significance": {},
+      "efficiency": {
+        "BPI_Challenge_2012": {
+          "activity_only_lstm": {
+            "train_time_seconds": 1538.3553622245788,
+            "infer_time_seconds": 19.85080623626709,
+            "params": 102046,
+            "epochs": 16
+          },
+          "mtlformer": {
+            "train_time_seconds": 1627.9425582408905,
+            "infer_time_seconds": 12.628570079803467,
+            "params": 143093,
+            "epochs": 16
+          },
+          "process_transformer": {
+            "train_time_seconds": 1085.538693189621,
+            "infer_time_seconds": 20.490430307388305,
+            "params": 32893,
+            "epochs": 11
+          },
+          "shared_lstm": {
+            "train_time_seconds": 1562.4267626285553,
+            "infer_time_seconds": 20.518924760818482,
+            "params": 166780,
+            "epochs": 14
+          },
+          "specialised_lstm": {
+            "train_time_seconds": 2172.6413242340086,
+            "infer_time_seconds": 46.447918796539305,
+            "params": 207580,
+            "epochs": 12
+          }
+        },
+        "Helpdesk": {
+          "activity_only_lstm": {
+            "train_time_seconds": 44.764245653152464,
+            "infer_time_seconds": 1.6215014934539795,
+            "params": 100756,
+            "epochs": 16
+          },
+          "mtlformer": {
+            "train_time_seconds": 43.784393882751466,
+            "infer_time_seconds": 0.8739159584045411,
+            "params": 139509,
+            "epochs": 14
+          },
+          "process_transformer": {
+            "train_time_seconds": 19.728637838363646,
+            "infer_time_seconds": 0.8459250926971436,
+            "params": 30616,
+            "epochs": 7
+          },
+          "shared_lstm": {
+            "train_time_seconds": 80.23189296722413,
+            "infer_time_seconds": 1.5963303565979003,
+            "params": 161832,
+            "epochs": 24
+          },
+          "specialised_lstm": {
+            "train_time_seconds": 91.53965020179749,
+            "infer_time_seconds": 3.028265190124512,
+            "params": 202632,
+            "epochs": 17
+          }
+        },
+        "Sepsis": {
+          "activity_only_lstm": {
+            "train_time_seconds": 145.91013450622557,
+            "infer_time_seconds": 2.5907081604003905,
+            "params": 101014,
+            "epochs": 28
+          },
+          "mtlformer": {
+            "train_time_seconds": 59.433912944793704,
+            "infer_time_seconds": 1.2462638854980468,
+            "params": 142253,
+            "epochs": 9
+          },
+          "process_transformer": {
+            "train_time_seconds": 71.04857974052429,
+            "infer_time_seconds": 1.656611394882202,
+            "params": 32085,
+            "epochs": 13
+          },
+          "shared_lstm": {
+            "train_time_seconds": 149.2154366016388,
+            "infer_time_seconds": 3.0475643157958983,
+            "params": 162476,
+            "epochs": 22
+          },
+          "specialised_lstm": {
+            "train_time_seconds": 299.1108540534973,
+            "infer_time_seconds": 5.5896447658538815,
+            "params": 203276,
+            "epochs": 27
+          }
+        },
+        "Tourism": {
+          "activity_only_lstm": {
+            "train_time_seconds": 6415.964923667908,
+            "infer_time_seconds": 74.71549649238587,
+            "params": 124621,
+            "epochs": 20
+          },
+          "mtlformer": {
+            "train_time_seconds": 5429.877642297744,
+            "infer_time_seconds": 47.655698204040526,
+            "params": 161468,
+            "epochs": 13
+          },
+          "process_transformer": {
+            "train_time_seconds": 2510.177316379547,
+            "infer_time_seconds": 82.47645959854125,
+            "params": 50568,
+            "epochs": 7
+          },
+          "shared_lstm": {
+            "train_time_seconds": 8921.225036668777,
+            "infer_time_seconds": 78.78446254730224,
+            "params": 205018,
+            "epochs": 21
+          },
+          "specialised_lstm": {
+            "train_time_seconds": 16357.553932714462,
+            "infer_time_seconds": 180.37091965675353,
+            "params": 245818,
+            "epochs": 23
+          }
+        },
+        "Traffic_Fines": {
+          "activity_only_lstm": {
+            "train_time_seconds": 583.2997899055481,
+            "infer_time_seconds": 19.625387334823607,
+            "params": 100369,
+            "epochs": 7
+          },
+          "mtlformer": {
+            "train_time_seconds": 478.48332080841067,
+            "infer_time_seconds": 9.388574266433716,
+            "params": 139525,
+            "epochs": 7
+          },
+          "process_transformer": {
+            "train_time_seconds": 391.4440099239349,
+            "infer_time_seconds": 17.200970888137817,
+            "params": 30478,
+            "epochs": 5
+          },
+          "shared_lstm": {
+            "train_time_seconds": 1146.996286392212,
+            "infer_time_seconds": 21.112279176712036,
+            "params": 160098,
+            "epochs": 12
+          },
+          "specialised_lstm": {
+            "train_time_seconds": 1620.3338146209717,
+            "infer_time_seconds": 44.0711567401886,
+            "params": 200898,
+            "epochs": 10
+          }
+        }
+      },
+      "efficiency_summary": {
+        "minimal": {
+          "process_transformer": {
+            "median_train_time_seconds": 391.4440099239349,
+            "median_infer_time_seconds": 17.200970888137817,
+            "median_params": 32085.0,
+            "median_epochs": 7.0,
+            "n_datasets": 5
+          },
+          "mtlformer": {
+            "median_train_time_seconds": 478.48332080841067,
+            "median_infer_time_seconds": 9.388574266433716,
+            "median_params": 142253.0,
+            "median_epochs": 13.0,
+            "n_datasets": 5
+          },
+          "activity_only_lstm": {
+            "median_train_time_seconds": 583.2997899055481,
+            "median_infer_time_seconds": 19.625387334823607,
+            "median_params": 101014.0,
+            "median_epochs": 16.0,
+            "n_datasets": 5
+          }
+        }
+      },
+      "stratified": {}
+    },
+    "next_time": {
+      "minimal": {
+        "per_dataset": {
+          "BPI_Challenge_2012": {
+            "process_transformer": {
+              "mean": 15.84884853363037,
+              "lower": 14.983750929464689,
+              "upper": 16.71394613779605,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 11.937650299072265,
+              "lower": 11.578677262181921,
+              "upper": 12.29662333596261,
+              "n": 5,
+              "rank": 1
+            }
+          },
+          "Helpdesk": {
+            "process_transformer": {
+              "mean": 173.97174682617188,
+              "lower": 165.97187480333827,
+              "upper": 181.9716188490055,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 163.56330261230468,
+              "lower": 157.47460382064543,
+              "upper": 169.65200140396394,
+              "n": 5,
+              "rank": 1
+            }
+          },
+          "Sepsis": {
+            "process_transformer": {
+              "mean": 50.049564361572266,
+              "lower": 40.21073653418378,
+              "upper": 59.88839218896075,
+              "n": 5,
+              "rank": 1
+            },
+            "mtlformer": {
+              "mean": 50.365361022949216,
+              "lower": 38.47203166852233,
+              "upper": 62.258690377376105,
+              "n": 5,
+              "rank": 2
+            }
+          },
+          "Tourism": {
+            "process_transformer": {
+              "mean": 233.02498779296874,
+              "lower": 222.0358324953,
+              "upper": 244.01414309063748,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 218.29007263183593,
+              "lower": 204.65362783890714,
+              "upper": 231.9265174247647,
+              "n": 5,
+              "rank": 1
+            }
+          },
+          "Traffic_Fines": {
+            "process_transformer": {
+              "mean": 1494.508251953125,
+              "lower": 1395.7135462433735,
+              "upper": 1593.3029576628765,
+              "n": 5,
+              "rank": 2
+            },
+            "mtlformer": {
+              "mean": 1412.0986328125,
+              "lower": 1399.343572194002,
+              "upper": 1424.853693430998,
+              "n": 5,
+              "rank": 1
+            }
+          }
+        }
+      },
+      "extended": {
+        "per_dataset": {},
+        "limitation": "No extended model available for next_time (NET); reported explicitly as a limitation."
+      },
+      "rankings": {
+        "minimal": {
+          "task": "next_time",
+          "task_direction": "lower",
+          "average_ranks": {
+            "process_transformer": 1.8,
+            "mtlformer": 1.2
+          },
+          "friedman_test": {
+            "statistic": NaN,
+            "p_value": NaN
+          },
+          "pairwise_tests": {
+            "process_transformer__vs__mtlformer": {
+              "statistic": 3.0,
+              "p_value": 0.375,
+              "mean_difference": 0.6000000000000001,
+              "model1_mean_rank": 1.8,
+              "model2_mean_rank": 1.2
+            }
+          },
+          "summary_statistics": {
+            "process_transformer": {
+              "mean": 393.48067989349363,
+              "std": 556.1910906210281,
+              "median": 173.97174682617188,
+              "min": 15.84884853363037,
+              "max": 1494.508251953125,
+              "n_datasets": 5,
+              "cv": 1.4135156287001855
+            },
+            "mtlformer": {
+              "mean": 371.2510038757324,
+              "std": 525.731622836962,
+              "median": 163.56330261230468,
+              "min": 11.937650299072265,
+              "max": 1412.0986328125,
+              "n_datasets": 5,
+              "cv": 1.41610828616894
+            }
+          },
+          "plackett_luce": {
+            "strengths": [
+              0.0,
+              1.3863045895929653
+            ],
+            "probabilities": [
+              0.19999836344932986,
+              0.8000016365506701
+            ],
+            "log_likelihood": -2.5020121177327885,
+            "success": true,
+            "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+            "n_iterations": 4,
+            "model_names": [
+              "process_transformer",
+              "mtlformer"
+            ],
+            "n_datasets": 5,
+            "ranking_data": {
+              "model_names": [
+                "process_transformer",
+                "mtlformer"
+              ],
+              "dataset_names": [
+                "BPI_Challenge_2012",
+                "Helpdesk",
+                "Sepsis",
+                "Tourism",
+                "Traffic_Fines"
+              ],
+              "direction": "lower",
+              "rankings": [
+                [
+                  2,
+                  1
+                ],
+                [
+                  2,
+                  1
+                ],
+                [
+                  1,
+                  2
+                ],
+                [
+                  2,
+                  1
+                ],
+                [
+                  2,
+                  1
+                ]
+              ],
+              "n_rankings": 5
+            }
+          },
+          "hierarchical_bayes": {
+            "trace": "Inference data with groups:\n\t> posterior\n\t> sample_stats\n\t> observed_data",
+            "model_effects_summary": {
+              "mean": [
+                0.931,
+                0.892
+              ],
+              "sd": [
+                1.016,
+                1.011
+              ],
+              "hdi_3%": [
+                -1.057,
+                -1.082
+              ],
+              "hdi_97%": [
+                2.804,
+                2.696
+              ],
+              "mcse_mean": [
+                0.01,
+                0.01
+              ],
+              "mcse_sd": [
+                0.011,
+                0.01
+              ],
+              "ess_bulk": [
+                10555.0,
+                10577.0
+              ],
+              "ess_tail": [
+                6411.0,
+                6322.0
+              ],
+              "r_hat": [
+                1.0,
+                1.0
+              ]
+            },
+            "dataset_effects_summary": {
+              "mean": [
+                0.009,
+                0.037,
+                0.015,
+                0.057,
+                0.347
+              ],
+              "sd": [
+                0.503,
+                0.5,
+                0.493,
+                0.5,
+                0.508
+              ],
+              "hdi_3%": [
+                -0.939,
+                -0.863,
+                -0.877,
+                -0.888,
+                -0.636
+              ],
+              "hdi_97%": [
+                0.956,
+                1.028,
+                0.995,
+                0.988,
+                1.253
+              ],
+              "mcse_mean": [
+                0.005,
+                0.005,
+                0.005,
+                0.004,
+                0.005
+              ],
+              "mcse_sd": [
+                0.006,
+                0.005,
+                0.006,
+                0.005,
+                0.005
+              ],
+              "ess_bulk": [
+                9792.0,
+                10438.0,
+                11472.0,
+                12560.0,
+                9294.0
+              ],
+              "ess_tail": [
+                5759.0,
+                6634.0,
+                6470.0,
+                6251.0,
+                6491.0
+              ],
+              "r_hat": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "pairwise_differences": {
+              "process_transformer__vs__mtlformer": {
+                "mean_difference": 0.03951454200262168,
+                "std_difference": 1.440663794458919,
+                "quantiles": [
+                  -2.7350057867352024,
+                  -0.9333468376588486,
+                  0.038093184846027195,
+                  1.0117710440173109,
+                  2.8962645639461306
+                ],
+                "prob_model1_better": 0.50875,
+                "credible_interval_95": [
+                  -2.7350057867352024,
+                  2.8962645639461306
+                ],
+                "credible_interval_50": [
+                  -0.9333468376588486,
+                  1.0117710440173109
+                ]
+              }
+            },
+            "model": "<pymc.model.core.Model object at 0x1193d3190>",
+            "data": {
+              "values": [
+                15.84884853363037,
+                11.937650299072265,
+                173.97174682617188,
+                163.56330261230468,
+                50.049564361572266,
+                50.365361022949216,
+                233.02498779296874,
+                218.29007263183593,
+                1494.508251953125,
+                1412.0986328125
+              ],
+              "model_idx": [
+                0,
+                1,
+                0,
+                1,
+                0,
+                1,
+                0,
+                1,
+                0,
+                1
+              ],
+              "dataset_idx": [
+                0,
+                0,
+                1,
+                1,
+                2,
+                2,
+                3,
+                3,
+                4,
+                4
+              ]
+            }
+          },
+          "summary": {
+            "best_model": "mtlformer",
+            "best_rank": 1.2,
+            "total_models": 2,
+            "valid_datasets": 5,
+            "total_datasets": 5
+          },
+          "pairwise_top_only": {},
+          "dataset_selection": {
+            "included": [
+              "BPI_Challenge_2012",
+              "Helpdesk",
+              "Sepsis",
+              "Tourism",
+              "Traffic_Fines"
+            ],
+            "excluded": [],
+            "counts": {
+              "included": 5,
+              "total_with_task": 5
+            }
+          }
+        },
+        "extended": {
+          "note": "No Extended-Track models for this task."
+        }
+      },
+      "significance": {},
+      "efficiency": {
+        "BPI_Challenge_2012": {
+          "mtlformer": {
+            "train_time_seconds": 1627.9425582408905,
+            "infer_time_seconds": 12.628570079803467,
+            "params": 143093,
+            "epochs": 16
+          },
+          "process_transformer": {
+            "train_time_seconds": 672.1400122642517,
+            "infer_time_seconds": 20.072045230865477,
+            "params": 37989,
+            "epochs": 7
+          }
+        },
+        "Helpdesk": {
+          "mtlformer": {
+            "train_time_seconds": 43.784393882751466,
+            "infer_time_seconds": 0.8739159584045411,
+            "params": 139509,
+            "epochs": 14
+          },
+          "process_transformer": {
+            "train_time_seconds": 17.724637842178346,
+            "infer_time_seconds": 0.7458493709564209,
+            "params": 36326,
+            "epochs": 8
+          }
+        },
+        "Sepsis": {
+          "mtlformer": {
+            "train_time_seconds": 59.433912944793704,
+            "infer_time_seconds": 1.2462638854980468,
+            "params": 142253,
+            "epochs": 9
+          },
+          "process_transformer": {
+            "train_time_seconds": 24.867621898651123,
+            "infer_time_seconds": 1.4568140506744385,
+            "params": 37701,
+            "epochs": 5
+          }
+        },
+        "Tourism": {
+          "mtlformer": {
+            "train_time_seconds": 5429.877642297744,
+            "infer_time_seconds": 47.655698204040526,
+            "params": 161468,
+            "epochs": 13
+          },
+          "process_transformer": {
+            "train_time_seconds": 1918.548168182373,
+            "infer_time_seconds": 76.107306432724,
+            "params": 44289,
+            "epochs": 6
+          }
+        },
+        "Traffic_Fines": {
+          "mtlformer": {
+            "train_time_seconds": 478.48332080841067,
+            "infer_time_seconds": 9.388574266433716,
+            "params": 139525,
+            "epochs": 7
+          },
+          "process_transformer": {
+            "train_time_seconds": 315.1565073013306,
+            "infer_time_seconds": 13.043817377090454,
+            "params": 36383,
+            "epochs": 6
+          }
+        }
+      },
+      "efficiency_summary": {
+        "minimal": {
+          "process_transformer": {
+            "median_train_time_seconds": 315.1565073013306,
+            "median_infer_time_seconds": 13.043817377090454,
+            "median_params": 37701.0,
+            "median_epochs": 6.0,
+            "n_datasets": 5
+          },
+          "mtlformer": {
+            "median_train_time_seconds": 478.48332080841067,
+            "median_infer_time_seconds": 9.388574266433716,
+            "median_params": 142253.0,
+            "median_epochs": 13.0,
+            "n_datasets": 5
+          }
+        }
+      },
+      "stratified": {}
+    },
+    "remaining_time": {
+      "minimal": {
+        "per_dataset": {
+          "BPI_Challenge_2012": {
+            "process_transformer": {
+              "mean": 7.573567962646484,
+              "lower": 7.332805742742207,
+              "upper": 7.814330182550761,
+              "n": 5,
+              "rank": 1
+            },
+            "mtlformer": {
+              "mean": 7.942724704742432,
+              "lower": 7.725919185771227,
+              "upper": 8.159530223713636,
+              "n": 5,
+              "rank": 2
+            }
+          },
+          "Helpdesk": {
+            "process_transformer": {
+              "mean": 6.846868419647217,
+              "lower": 6.727863921946004,
+              "upper": 6.96587291734843,
+              "n": 5,
+              "rank": 1
+            },
+            "mtlformer": {
+              "mean": 8.615446472167969,
+              "lower": 8.37226270476639,
+              "upper": 8.858630239569548,
+              "n": 5,
+              "rank": 2
+            }
+          },
+          "Sepsis": {
+            "process_transformer": {
+              "mean": 38.02341003417969,
+              "lower": 33.228837746520014,
+              "upper": 42.81798232183937,
+              "n": 5,
+              "rank": 1
+            },
+            "mtlformer": {
+              "mean": 39.77123260498047,
+              "lower": 34.724166551964245,
+              "upper": 44.81829865799669,
+              "n": 5,
+              "rank": 2
+            }
+          },
+          "Tourism": {
+            "process_transformer": {
+              "mean": 46.587318420410156,
+              "lower": 45.8450756959143,
+              "upper": 47.32956114490601,
+              "n": 5,
+              "rank": 1
+            },
+            "mtlformer": {
+              "mean": 50.83024444580078,
+              "lower": 49.00734701834104,
+              "upper": 52.65314187326052,
+              "n": 5,
+              "rank": 2
+            }
+          },
+          "Traffic_Fines": {
+            "process_transformer": {
+              "mean": 191.65274658203126,
+              "lower": 189.49716924282842,
+              "upper": 193.8083239212341,
+              "n": 5,
+              "rank": 1
+            },
+            "mtlformer": {
+              "mean": 236.09172668457032,
+              "lower": 232.9468457789796,
+              "upper": 239.23660759016104,
+              "n": 5,
+              "rank": 2
+            }
+          }
+        }
+      },
+      "extended": {
+        "scale_note": "Extended-Track metric scale differs from Minimal-Track for some models (e.g., normalized vs absolute MAE). Uplifts are omitted where non-comparable.",
+        "per_dataset": {
+          "BPI_Challenge_2012": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.05140799999999999,
+              "lower": 0.051097410216135286,
+              "upper": 0.05171858978386469,
+              "n": 5,
+              "uplift_vs_minimal_best": null,
+              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
+            }
+          },
+          "Helpdesk": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.09173200000000001,
+              "lower": 0.08737502066909103,
+              "upper": 0.09608897933090899,
+              "n": 5,
+              "uplift_vs_minimal_best": null,
+              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
+            }
+          },
+          "Sepsis": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.073544,
+              "lower": 0.06996902530463024,
+              "upper": 0.07711897469536975,
+              "n": 5,
+              "uplift_vs_minimal_best": null,
+              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
+            }
+          },
+          "Tourism": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.07175400000000001,
+              "lower": 0.07027885822843478,
+              "upper": 0.07322914177156524,
+              "n": 5,
+              "uplift_vs_minimal_best": null,
+              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
+            }
+          },
+          "Traffic_Fines": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.045982,
+              "lower": 0.04395768018392729,
+              "upper": 0.048006319816072715,
+              "n": 5,
+              "uplift_vs_minimal_best": null,
+              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
+            }
+          }
+        }
+      },
+      "rankings": {
+        "minimal": {
+          "task": "remaining_time",
+          "task_direction": "lower",
+          "average_ranks": {
+            "process_transformer": 1.0,
+            "mtlformer": 2.0
+          },
+          "friedman_test": {
+            "statistic": NaN,
+            "p_value": NaN
+          },
+          "pairwise_tests": {
+            "process_transformer__vs__mtlformer": {
+              "statistic": 0.0,
+              "p_value": 0.0625,
+              "mean_difference": -1.0,
+              "model1_mean_rank": 1.0,
+              "model2_mean_rank": 2.0
+            }
+          },
+          "summary_statistics": {
+            "process_transformer": {
+              "mean": 58.13678228378296,
+              "std": 68.631981594515,
+              "median": 38.02341003417969,
+              "min": 6.846868419647217,
+              "max": 191.65274658203126,
+              "n_datasets": 5,
+              "cv": 1.180525975096142
+            },
+            "mtlformer": {
+              "mean": 68.65027498245239,
+              "std": 85.41402650625909,
+              "median": 39.77123260498047,
+              "min": 7.942724704742432,
+              "max": 236.09172668457032,
+              "n_datasets": 5,
+              "cv": 1.2441905954213828
+            }
+          },
+          "plackett_luce": {
+            "strengths": [
+              0.0,
+              -10.0
+            ],
+            "probabilities": [
+              0.9999546021312976,
+              4.5397868702434395e-05
+            ],
+            "log_likelihood": -0.0002269944960843527,
+            "success": true,
+            "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+            "n_iterations": 12,
+            "model_names": [
+              "process_transformer",
+              "mtlformer"
+            ],
+            "n_datasets": 5,
+            "ranking_data": {
+              "model_names": [
+                "process_transformer",
+                "mtlformer"
+              ],
+              "dataset_names": [
+                "BPI_Challenge_2012",
+                "Helpdesk",
+                "Sepsis",
+                "Tourism",
+                "Traffic_Fines"
+              ],
+              "direction": "lower",
+              "rankings": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1,
+                  2
+                ],
+                [
+                  1,
+                  2
+                ],
+                [
+                  1,
+                  2
+                ],
+                [
+                  1,
+                  2
+                ]
+              ],
+              "n_rankings": 5
+            }
+          },
+          "hierarchical_bayes": {
+            "trace": "Inference data with groups:\n\t> posterior\n\t> sample_stats\n\t> observed_data",
+            "model_effects_summary": {
+              "mean": [
+                0.923,
+                1.087
+              ],
+              "sd": [
+                1.008,
+                0.997
+              ],
+              "hdi_3%": [
+                -0.969,
+                -0.746
+              ],
+              "hdi_97%": [
+                2.823,
+                2.982
+              ],
+              "mcse_mean": [
+                0.01,
+                0.01
+              ],
+              "mcse_sd": [
+                0.011,
+                0.011
+              ],
+              "ess_bulk": [
+                11081.0,
+                10334.0
+              ],
+              "ess_tail": [
+                6384.0,
+                6331.0
+              ],
+              "r_hat": [
+                1.0,
+                1.0
+              ]
+            },
+            "dataset_effects_summary": {
+              "mean": [
+                0.008,
+                0.008,
+                0.066,
+                0.079,
+                0.341
+              ],
+              "sd": [
+                0.498,
+                0.514,
+                0.492,
+                0.501,
+                0.506
+              ],
+              "hdi_3%": [
+                -0.945,
+                -0.961,
+                -0.884,
+                -0.837,
+                -0.637
+              ],
+              "hdi_97%": [
+                0.921,
+                0.95,
+                0.983,
+                1.041,
+                1.276
+              ],
+              "mcse_mean": [
+                0.005,
+                0.005,
+                0.005,
+                0.005,
+                0.005
+              ],
+              "mcse_sd": [
+                0.006,
+                0.005,
+                0.005,
+                0.005,
+                0.005
+              ],
+              "ess_bulk": [
+                9051.0,
+                10286.0,
+                8205.0,
+                10430.0,
+                10188.0
+              ],
+              "ess_tail": [
+                5799.0,
+                6526.0,
+                6544.0,
+                6530.0,
+                6844.0
+              ],
+              "r_hat": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "pairwise_differences": {
+              "process_transformer__vs__mtlformer": {
+                "mean_difference": -0.16353037639418105,
+                "std_difference": 1.4001177191054726,
+                "quantiles": [
+                  -2.952289705725214,
+                  -1.0779030852231088,
+                  -0.15947197384584977,
+                  0.7598698956364691,
+                  2.594031538899238
+                ],
+                "prob_model1_better": 0.454375,
+                "credible_interval_95": [
+                  -2.952289705725214,
+                  2.594031538899238
+                ],
+                "credible_interval_50": [
+                  -1.0779030852231088,
+                  0.7598698956364691
+                ]
+              }
+            },
+            "model": "<pymc.model.core.Model object at 0x119308250>",
+            "data": {
+              "values": [
+                7.573567962646484,
+                7.942724704742432,
+                6.846868419647217,
+                8.615446472167969,
+                38.02341003417969,
+                39.77123260498047,
+                46.587318420410156,
+                50.83024444580078,
+                191.65274658203126,
+                236.09172668457032
+              ],
+              "model_idx": [
+                0,
+                1,
+                0,
+                1,
+                0,
+                1,
+                0,
+                1,
+                0,
+                1
+              ],
+              "dataset_idx": [
+                0,
+                0,
+                1,
+                1,
+                2,
+                2,
+                3,
+                3,
+                4,
+                4
+              ]
+            }
+          },
+          "summary": {
+            "best_model": "process_transformer",
+            "best_rank": 1.0,
+            "total_models": 2,
+            "valid_datasets": 5,
+            "total_datasets": 5
+          },
+          "pairwise_top_only": {},
+          "dataset_selection": {
+            "included": [
+              "BPI_Challenge_2012",
+              "Helpdesk",
+              "Sepsis",
+              "Tourism",
+              "Traffic_Fines"
+            ],
+            "excluded": [],
+            "counts": {
+              "included": 5,
+              "total_with_task": 5
+            }
+          }
+        },
+        "extended": {
+          "note": "Extended-Track is descriptive only. No Plackett\u2013Luce, Bayes, or pairwise significance tests run."
+        }
+      },
+      "significance": {},
+      "efficiency": {
+        "BPI_Challenge_2012": {
+          "mtlformer": {
+            "train_time_seconds": 1627.9425582408905,
+            "infer_time_seconds": 12.628570079803467,
+            "params": 143093,
+            "epochs": 16
+          },
+          "process_transformer": {
+            "train_time_seconds": 797.2249949932099,
+            "infer_time_seconds": 20.934117221832274,
+            "params": 37989,
+            "epochs": 8
+          }
+        },
+        "Helpdesk": {
+          "mtlformer": {
+            "train_time_seconds": 43.784393882751466,
+            "infer_time_seconds": 0.8739159584045411,
+            "params": 139509,
+            "epochs": 14
+          },
+          "process_transformer": {
+            "train_time_seconds": 16.156314897537232,
+            "infer_time_seconds": 0.8854703426361084,
+            "params": 36362,
+            "epochs": 6
+          }
+        },
+        "Sepsis": {
+          "mtlformer": {
+            "train_time_seconds": 59.433912944793704,
+            "infer_time_seconds": 1.2462638854980468,
+            "params": 142253,
+            "epochs": 9
+          },
+          "process_transformer": {
+            "train_time_seconds": 32.02034859657287,
+            "infer_time_seconds": 1.4814264297485351,
+            "params": 37701,
+            "epochs": 6
+          }
+        },
+        "Tourism": {
+          "mtlformer": {
+            "train_time_seconds": 5429.877642297744,
+            "infer_time_seconds": 47.655698204040526,
+            "params": 161468,
+            "epochs": 13
+          },
+          "process_transformer": {
+            "train_time_seconds": 2509.422419261932,
+            "infer_time_seconds": 81.82518758773804,
+            "params": 44289,
+            "epochs": 7
+          }
+        },
+        "Traffic_Fines": {
+          "mtlformer": {
+            "train_time_seconds": 478.48332080841067,
+            "infer_time_seconds": 9.388574266433716,
+            "params": 139525,
+            "epochs": 7
+          },
+          "process_transformer": {
+            "train_time_seconds": 349.8925323009491,
+            "infer_time_seconds": 16.10991406440735,
+            "params": 36419,
+            "epochs": 5
+          }
+        }
+      },
+      "efficiency_summary": {
+        "minimal": {
+          "process_transformer": {
+            "median_train_time_seconds": 349.8925323009491,
+            "median_infer_time_seconds": 16.10991406440735,
+            "median_params": 37701.0,
+            "median_epochs": 6.0,
+            "n_datasets": 5
+          },
+          "mtlformer": {
+            "median_train_time_seconds": 478.48332080841067,
+            "median_infer_time_seconds": 9.388574266433716,
+            "median_params": 142253.0,
+            "median_epochs": 13.0,
+            "n_datasets": 5
+          }
+        }
+      },
+      "stratified": {}
+    }
+  },
+  "notes": {
+    "inference": "Inferential statistics (Plackett\u2013Luce, Bayesian tests, non-parametric tests) are reported for the Minimal-Track. Extended-Track results are descriptive; where metric scales are non-comparable (e.g., normalized vs absolute MAE), uplifts are omitted and a note is added.",
+    "ci_method": "Per-dataset 95% t-based confidence intervals computed over cross-validation folds (n\u22485). Accuracy: higher is better. Time tasks: MAE (lower is better).",
+    "dataset_exclusion_criteria": "A dataset contributes to average ranks only if all compared Minimal-Track models have valid scores. Datasets with missing model scores or missing fold metrics are excluded and listed under dataset_selection."
+  },
+  "mtlformer_efficiency": {
+    "BPI_Challenge_2012": {
+      "multitask_mtlformer": {
+        "train_time_seconds": 1627.9425582408905,
+        "infer_time_seconds": 12.628570079803467,
+        "params": 143093,
+        "epochs": 16
+      },
+      "single_task_sum": {
+        "train_time_seconds": 2554.9037004470824,
+        "infer_time_seconds": 61.49659276008605,
+        "params": 37989,
+        "count": 3
+      },
+      "comparison": {
+        "train_time_ratio_multi_vs_sum": 0.637183529835593,
+        "infer_time_ratio_multi_vs_sum": 0.2053539800013108
+      }
+    },
+    "Helpdesk": {
+      "multitask_mtlformer": {
+        "train_time_seconds": 43.784393882751466,
+        "infer_time_seconds": 0.8739159584045411,
+        "params": 139509,
+        "epochs": 14
+      },
+      "single_task_sum": {
+        "train_time_seconds": 53.60959057807922,
+        "infer_time_seconds": 2.477244806289673,
+        "params": 36362,
+        "count": 3
+      },
+      "comparison": {
+        "train_time_ratio_multi_vs_sum": 0.8167268843245886,
+        "infer_time_ratio_multi_vs_sum": 0.35277739050484097
+      }
+    },
+    "Sepsis": {
+      "multitask_mtlformer": {
+        "train_time_seconds": 59.433912944793704,
+        "infer_time_seconds": 1.2462638854980468,
+        "params": 142253,
+        "epochs": 9
+      },
+      "single_task_sum": {
+        "train_time_seconds": 127.93655023574829,
+        "infer_time_seconds": 4.594851875305176,
+        "params": 37701,
+        "count": 3
+      },
+      "comparison": {
+        "train_time_ratio_multi_vs_sum": 0.4645577267424752,
+        "infer_time_ratio_multi_vs_sum": 0.27123048126883825
+      }
+    },
+    "Tourism": {
+      "multitask_mtlformer": {
+        "train_time_seconds": 5429.877642297744,
+        "infer_time_seconds": 47.655698204040526,
+        "params": 161468,
+        "epochs": 13
+      },
+      "single_task_sum": {
+        "train_time_seconds": 6938.147903823852,
+        "infer_time_seconds": 240.4089536190033,
+        "params": 50568,
+        "count": 3
+      },
+      "comparison": {
+        "train_time_ratio_multi_vs_sum": 0.7826119762170466,
+        "infer_time_ratio_multi_vs_sum": 0.19822763456457865
+      }
+    },
+    "Traffic_Fines": {
+      "multitask_mtlformer": {
+        "params": 139525
+      },
+      "single_task_sum": {
+        "train_time_seconds": 1056.4930495262147,
+        "infer_time_seconds": 46.35470232963562,
+        "params": 36419,
+        "count": 3
+      },
+      "comparison": {
+        "train_time_ratio_multi_vs_sum": 0.0,
+        "infer_time_ratio_multi_vs_sum": 0.0
+      }
+    }
+  }
+}

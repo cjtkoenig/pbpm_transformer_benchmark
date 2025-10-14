@@ -14,6 +14,7 @@ Table of Contents
 - Models and Adapters
 - Metrics
 - Analysis and Reporting
+- Hierarchical Bayes (enable PyMC/ArviZ)
 - Make Targets
 - Troubleshooting and Known Pitfalls
 - Project Layout
@@ -41,7 +42,7 @@ make setup
 Notes
 - Minimal install includes pandas 2.3.x, numpy 1.26.x, scikit-learn >=1.4,<1.6, scipy 1.16.x — sufficient for CLI and preprocessing utilities.
 - PyTorch (for PyTorch-based utilities) runs on Apple Silicon with MPS when train.accelerator=mps.
-- TensorFlow: prefer >= 2.20.0 on Python 3.11 (requirements.txt’s 2.15.1 pin may be incompatible in some environments).
+- TensorFlow: pinned to 2.20.0 in requirements.txt (Python 3.11 compatible).
 
 
 ## Installation and Environment
@@ -322,6 +323,7 @@ make analyze_full TASK=next_activity
 
 make analyze_all
 ```
+
 
 ## Make Targets
 ```bash

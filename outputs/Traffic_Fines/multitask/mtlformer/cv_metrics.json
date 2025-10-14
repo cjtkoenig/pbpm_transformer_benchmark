@@ -1,0 +1,145 @@
+{
+  "fold_metrics": [
+    {
+      "next_activity_accuracy": 0.8011244277682659,
+      "next_time_mae": 1406.1177978515625,
+      "next_time_mse": 9134988.0,
+      "next_time_r2": 0.5956097841262817,
+      "remaining_time_mae": 233.81640625,
+      "remaining_time_mse": 92752.9765625,
+      "remaining_time_r2": 0.0724678635597229,
+      "param_count": 139568
+    },
+    {
+      "next_activity_accuracy": 0.8067748266068577,
+      "next_time_mae": 1415.8270263671875,
+      "next_time_mse": 8883203.0,
+      "next_time_r2": 0.6058248281478882,
+      "remaining_time_mae": 232.36148071289062,
+      "remaining_time_mse": 91509.9609375,
+      "remaining_time_r2": 0.07787466049194336,
+      "param_count": 139568
+    },
+    {
+      "next_activity_accuracy": 0.8076142563766056,
+      "next_time_mae": 1406.304931640625,
+      "next_time_mse": 9135688.0,
+      "next_time_r2": 0.5995175242424011,
+      "remaining_time_mae": 235.26197814941406,
+      "remaining_time_mse": 93158.578125,
+      "remaining_time_r2": 0.07167279720306396,
+      "param_count": 139568
+    },
+    {
+      "next_activity_accuracy": 0.8070753226551297,
+      "next_time_mae": 1408.398681640625,
+      "next_time_mse": 8826452.0,
+      "next_time_r2": 0.6045395731925964,
+      "remaining_time_mae": 235.43357849121094,
+      "remaining_time_mse": 90897.6484375,
+      "remaining_time_r2": 0.06803613901138306,
+      "param_count": 139568
+    },
+    {
+      "next_activity_accuracy": 0.8025910457938121,
+      "next_time_mae": 1416.6143798828125,
+      "next_time_mse": 9083660.0,
+      "next_time_r2": 0.600834846496582,
+      "remaining_time_mae": 235.1312713623047,
+      "remaining_time_mse": 92520.9609375,
+      "remaining_time_r2": 0.07352620363235474,
+      "param_count": 139352
+    }
+  ],
+  "cv_summary": {
+    "next_activity_accuracy_mean": 0.8050359758401342,
+    "next_activity_accuracy_std": 0.002649828643345063,
+    "next_activity_accuracy_min": 0.8011244277682659,
+    "next_activity_accuracy_max": 0.8076142563766056,
+    "next_activity_accuracy_values": [
+      0.8011244277682659,
+      0.8067748266068577,
+      0.8076142563766056,
+      0.8070753226551297,
+      0.8025910457938121
+    ],
+    "next_time_mae_mean": 1410.6525634765626,
+    "next_time_mae_std": 4.6230791958000195,
+    "next_time_mae_min": 1406.1177978515625,
+    "next_time_mae_max": 1416.6143798828125,
+    "next_time_mae_values": [
+      1406.1177978515625,
+      1415.8270263671875,
+      1406.304931640625,
+      1408.398681640625,
+      1416.6143798828125
+    ],
+    "next_time_mse_mean": 9012798.2,
+    "next_time_mse_std": 131585.3084388983,
+    "next_time_mse_min": 8826452.0,
+    "next_time_mse_max": 9135688.0,
+    "next_time_mse_values": [
+      9134988.0,
+      8883203.0,
+      9135688.0,
+      8826452.0,
+      9083660.0
+    ],
+    "next_time_r2_mean": 0.6012653112411499,
+    "next_time_r2_std": 0.003653355498328704,
+    "next_time_r2_min": 0.5956097841262817,
+    "next_time_r2_max": 0.6058248281478882,
+    "next_time_r2_values": [
+      0.5956097841262817,
+      0.6058248281478882,
+      0.5995175242424011,
+      0.6045395731925964,
+      0.600834846496582
+    ],
+    "remaining_time_mae_mean": 234.40094299316405,
+    "remaining_time_mae_std": 1.1698022683909928,
+    "remaining_time_mae_min": 232.36148071289062,
+    "remaining_time_mae_max": 235.43357849121094,
+    "remaining_time_mae_values": [
+      233.81640625,
+      232.36148071289062,
+      235.26197814941406,
+      235.43357849121094,
+      235.1312713623047
+    ],
+    "remaining_time_mse_mean": 92168.025,
+    "remaining_time_mse_std": 836.0421664964969,
+    "remaining_time_mse_min": 90897.6484375,
+    "remaining_time_mse_max": 93158.578125,
+    "remaining_time_mse_values": [
+      92752.9765625,
+      91509.9609375,
+      93158.578125,
+      90897.6484375,
+      92520.9609375
+    ],
+    "remaining_time_r2_mean": 0.0727155327796936,
+    "remaining_time_r2_std": 0.003172354001269447,
+    "remaining_time_r2_min": 0.06803613901138306,
+    "remaining_time_r2_max": 0.07787466049194336,
+    "remaining_time_r2_values": [
+      0.0724678635597229,
+      0.07787466049194336,
+      0.07167279720306396,
+      0.06803613901138306,
+      0.07352620363235474
+    ],
+    "param_count_mean": 139524.8,
+    "param_count_std": 86.4,
+    "param_count_min": 139352.0,
+    "param_count_max": 139568.0,
+    "param_count_values": [
+      139568.0,
+      139568.0,
+      139568.0,
+      139568.0,
+      139352.0
+    ]
+  },
+  "dataset_name": "Traffic_Fines"
+}

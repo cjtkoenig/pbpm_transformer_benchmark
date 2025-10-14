@@ -18,23 +18,8 @@ from enum import Enum
 from pathlib import Path
 import json
 
-# Optional Bayesian stack; import lazily to avoid hard dependency during basic analyses
-pm = None  # type: ignore
-az = None  # type: ignore
-
-def _lazy_import_bayes():
-    global pm, az
-    if pm is not None and az is not None:
-        return
-    try:
-        import pymc as _pm  # type: ignore
-        import arviz as _az  # type: ignore
-        pm = _pm
-        az = _az
-    except Exception as e:
-        # Leave pm/az as None; hierarchical Bayes features will be disabled unless available
-        pm = None
-        az = None
+import pymc as pm  # type: ignore
+import arviz as az  # type: ignore
 
 from scipy.optimize import minimize
 
@@ -228,14 +213,6 @@ class HierarchicalBayesModel:
         
         if data is None:
             return {'error': 'No valid data for hierarchical model'}
-        
-        _lazy_import_bayes()
-        if pm is None or az is None:
-            return {
-                'error': 'PyMC/ArviZ not available; install compatible versions (e.g., pymc>=5 and arviz) or pin numpy<2.0 to enable hierarchical Bayes.',
-                'model': None,
-                'data': data
-            }
         with pm.Model() as model:
             # Prior for global model effects
             model_effects = pm.Normal('model_effects', mu=0, sigma=1, shape=self.n_models)
@@ -708,7 +685,38 @@ class BenchmarkStatisticalAnalysis:
         # Fit hierarchical Bayes model
         if include_hierarchical_bayes:
             try:
-                report['hierarchical_bayes'] = self.fit_hierarchical_bayes_model(task)
+                hb = self.fit_hierarchical_bayes_model(task)
+                # Ensure JSON-safe keys and values in HB outputs
+                if isinstance(hb, dict):
+                    p = hb.get('pairwise_differences')
+                    if isinstance(p, dict):
+                        try:
+                            # Convert tuple keys to string keys and numpy arrays to lists
+                            p_json = {}
+                            for k, v in p.items():
+                                try:
+                                    if isinstance(k, tuple) and len(k) == 2:
+                                        key_str = f"{k[0]}__vs__{k[1]}"
+                                    else:
+                                        key_str = str(k)
+                                    # Convert any numpy arrays inside v
+                                    if isinstance(v, dict):
+                                        v_conv = {}
+                                        for vk, vv in v.items():
+                                            try:
+                                                vv_out = vv.tolist() if hasattr(vv, 'tolist') else vv
+                                            except Exception:
+                                                vv_out = vv
+                                            v_conv[str(vk)] = vv_out
+                                        p_json[key_str] = v_conv
+                                    else:
+                                        p_json[key_str] = v
+                                except Exception:
+                                    p_json[str(k)] = v
+                            hb['pairwise_differences'] = p_json
+                        except Exception:
+                            pass
+                report['hierarchical_bayes'] = hb
             except Exception as e:
                 warnings.warn(f"Hierarchical Bayes model failed: {e}")
                 report['hierarchical_bayes'] = {'error': str(e)}

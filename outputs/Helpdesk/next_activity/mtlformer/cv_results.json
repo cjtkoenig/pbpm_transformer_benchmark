@@ -1,0 +1,112 @@
+{
+  "fold_results": [
+    {
+      "fold_idx": 0,
+      "metrics": {
+        "accuracy": 0.6115107913669064,
+        "train_time_sec": 30.52432131767273,
+        "infer_time_sec": 0.8639509677886963,
+        "param_count": 139451,
+        "epochs_run": 9
+      }
+    },
+    {
+      "fold_idx": 1,
+      "metrics": {
+        "accuracy": 0.7753709198813057,
+        "train_time_sec": 41.429224491119385,
+        "infer_time_sec": 0.9192459583282471,
+        "param_count": 139523,
+        "epochs_run": 13
+      }
+    },
+    {
+      "fold_idx": 2,
+      "metrics": {
+        "accuracy": 0.6295754026354319,
+        "train_time_sec": 54.43158411979675,
+        "infer_time_sec": 0.8556792736053467,
+        "param_count": 139523,
+        "epochs_run": 18
+      }
+    },
+    {
+      "fold_idx": 3,
+      "metrics": {
+        "accuracy": 0.7817304793488091,
+        "train_time_sec": 40.96176600456238,
+        "infer_time_sec": 0.8179035186767578,
+        "param_count": 139523,
+        "epochs_run": 12
+      }
+    },
+    {
+      "fold_idx": 4,
+      "metrics": {
+        "accuracy": 0.6168168168168168,
+        "train_time_sec": 51.57507348060608,
+        "infer_time_sec": 0.9128000736236572,
+        "param_count": 139523,
+        "epochs_run": 16
+      }
+    }
+  ],
+  "cv_summary": {
+    "accuracy_mean": 0.683000882009854,
+    "accuracy_std": 0.07826263818590004,
+    "accuracy_min": 0.6115107913669064,
+    "accuracy_max": 0.7817304793488091,
+    "accuracy_values": [
+      0.6115107913669064,
+      0.7753709198813057,
+      0.6295754026354319,
+      0.7817304793488091,
+      0.6168168168168168
+    ],
+    "train_time_sec_mean": 43.784393882751466,
+    "train_time_sec_std": 8.525267432443693,
+    "train_time_sec_min": 30.52432131767273,
+    "train_time_sec_max": 54.43158411979675,
+    "train_time_sec_values": [
+      30.52432131767273,
+      41.429224491119385,
+      54.43158411979675,
+      40.96176600456238,
+      51.57507348060608
+    ],
+    "infer_time_sec_mean": 0.8739159584045411,
+    "infer_time_sec_std": 0.03777844471164551,
+    "infer_time_sec_min": 0.8179035186767578,
+    "infer_time_sec_max": 0.9192459583282471,
+    "infer_time_sec_values": [
+      0.8639509677886963,
+      0.9192459583282471,
+      0.8556792736053467,
+      0.8179035186767578,
+      0.9128000736236572
+    ],
+    "param_count_mean": 139508.6,
+    "param_count_std": 28.8,
+    "param_count_min": 139451.0,
+    "param_count_max": 139523.0,
+    "param_count_values": [
+      139451.0,
+      139523.0,
+      139523.0,
+      139523.0,
+      139523.0
+    ],
+    "epochs_run_mean": 13.6,
+    "epochs_run_std": 3.1368774282716245,
+    "epochs_run_min": 9.0,
+    "epochs_run_max": 18.0,
+    "epochs_run_values": [
+      9.0,
+      13.0,
+      18.0,
+      12.0,
+      16.0
+    ]
+  },
+  "dataset_name": "Helpdesk"
+}

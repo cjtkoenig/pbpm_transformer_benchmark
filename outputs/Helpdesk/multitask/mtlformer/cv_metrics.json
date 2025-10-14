@@ -1,0 +1,193 @@
+{
+  "fold_metrics": [
+    {
+      "next_activity_accuracy": 0.6115107913669064,
+      "next_time_mae": 161.37451171875,
+      "next_time_mse": 55296.21484375,
+      "next_time_r2": 0.5400182604789734,
+      "remaining_time_mae": 8.616840362548828,
+      "remaining_time_mse": 109.56192779541016,
+      "remaining_time_r2": 0.19737976789474487,
+      "param_count": 139451,
+      "train_time_sec": 30.52432131767273,
+      "infer_time_sec": 0.8639509677886963,
+      "epochs_run": 9
+    },
+    {
+      "next_activity_accuracy": 0.7753709198813057,
+      "next_time_mae": 158.29367065429688,
+      "next_time_mse": 50135.609375,
+      "next_time_r2": 0.578239917755127,
+      "remaining_time_mae": 8.373481750488281,
+      "remaining_time_mse": 109.75727081298828,
+      "remaining_time_r2": 0.16002774238586426,
+      "param_count": 139523,
+      "train_time_sec": 41.429224491119385,
+      "infer_time_sec": 0.9192459583282471,
+      "epochs_run": 13
+    },
+    {
+      "next_activity_accuracy": 0.6295754026354319,
+      "next_time_mae": 165.57481384277344,
+      "next_time_mse": 53684.12109375,
+      "next_time_r2": 0.5414606928825378,
+      "remaining_time_mae": 8.60873031616211,
+      "remaining_time_mse": 111.15695190429688,
+      "remaining_time_r2": 0.20630478858947754,
+      "param_count": 139523,
+      "train_time_sec": 54.43158411979675,
+      "infer_time_sec": 0.8556792736053467,
+      "epochs_run": 18
+    },
+    {
+      "next_activity_accuracy": 0.7817304793488091,
+      "next_time_mae": 171.01661682128906,
+      "next_time_mse": 57561.8515625,
+      "next_time_r2": 0.5256785154342651,
+      "remaining_time_mae": 8.559835433959961,
+      "remaining_time_mse": 110.83696746826172,
+      "remaining_time_r2": 0.17392849922180176,
+      "param_count": 139523,
+      "train_time_sec": 40.96176600456238,
+      "infer_time_sec": 0.8179035186767578,
+      "epochs_run": 12
+    },
+    {
+      "next_activity_accuracy": 0.6168168168168168,
+      "next_time_mae": 161.55690002441406,
+      "next_time_mse": 54111.671875,
+      "next_time_r2": 0.5568113327026367,
+      "remaining_time_mae": 8.918344497680664,
+      "remaining_time_mse": 119.46113586425781,
+      "remaining_time_r2": 0.1363621950149536,
+      "param_count": 139523,
+      "train_time_sec": 51.57507348060608,
+      "infer_time_sec": 0.9128000736236572,
+      "epochs_run": 16
+    }
+  ],
+  "cv_summary": {
+    "next_activity_accuracy_mean": 0.683000882009854,
+    "next_activity_accuracy_std": 0.07826263818590004,
+    "next_activity_accuracy_min": 0.6115107913669064,
+    "next_activity_accuracy_max": 0.7817304793488091,
+    "next_activity_accuracy_values": [
+      0.6115107913669064,
+      0.7753709198813057,
+      0.6295754026354319,
+      0.7817304793488091,
+      0.6168168168168168
+    ],
+    "next_time_mae_mean": 163.56330261230468,
+    "next_time_mae_std": 4.385967351027813,
+    "next_time_mae_min": 158.29367065429688,
+    "next_time_mae_max": 171.01661682128906,
+    "next_time_mae_values": [
+      161.37451171875,
+      158.29367065429688,
+      165.57481384277344,
+      171.01661682128906,
+      161.55690002441406
+    ],
+    "next_time_mse_mean": 54157.89375,
+    "next_time_mse_std": 2420.2509079293336,
+    "next_time_mse_min": 50135.609375,
+    "next_time_mse_max": 57561.8515625,
+    "next_time_mse_values": [
+      55296.21484375,
+      50135.609375,
+      53684.12109375,
+      57561.8515625,
+      54111.671875
+    ],
+    "next_time_r2_mean": 0.548441743850708,
+    "next_time_r2_std": 0.01786525061823402,
+    "next_time_r2_min": 0.5256785154342651,
+    "next_time_r2_max": 0.578239917755127,
+    "next_time_r2_values": [
+      0.5400182604789734,
+      0.578239917755127,
+      0.5414606928825378,
+      0.5256785154342651,
+      0.5568113327026367
+    ],
+    "remaining_time_mae_mean": 8.615446472167969,
+    "remaining_time_mae_std": 0.17517635551037103,
+    "remaining_time_mae_min": 8.373481750488281,
+    "remaining_time_mae_max": 8.918344497680664,
+    "remaining_time_mae_values": [
+      8.616840362548828,
+      8.373481750488281,
+      8.60873031616211,
+      8.559835433959961,
+      8.918344497680664
+    ],
+    "remaining_time_mse_mean": 112.15485076904297,
+    "remaining_time_mse_std": 3.703675461596662,
+    "remaining_time_mse_min": 109.56192779541016,
+    "remaining_time_mse_max": 119.46113586425781,
+    "remaining_time_mse_values": [
+      109.56192779541016,
+      109.75727081298828,
+      111.15695190429688,
+      110.83696746826172,
+      119.46113586425781
+    ],
+    "remaining_time_r2_mean": 0.1748005986213684,
+    "remaining_time_r2_std": 0.02529364181429687,
+    "remaining_time_r2_min": 0.1363621950149536,
+    "remaining_time_r2_max": 0.20630478858947754,
+    "remaining_time_r2_values": [
+      0.19737976789474487,
+      0.16002774238586426,
+      0.20630478858947754,
+      0.17392849922180176,
+      0.1363621950149536
+    ],
+    "param_count_mean": 139508.6,
+    "param_count_std": 28.8,
+    "param_count_min": 139451.0,
+    "param_count_max": 139523.0,
+    "param_count_values": [
+      139451.0,
+      139523.0,
+      139523.0,
+      139523.0,
+      139523.0
+    ],
+    "train_time_sec_mean": 43.784393882751466,
+    "train_time_sec_std": 8.525267432443693,
+    "train_time_sec_min": 30.52432131767273,
+    "train_time_sec_max": 54.43158411979675,
+    "train_time_sec_values": [
+      30.52432131767273,
+      41.429224491119385,
+      54.43158411979675,
+      40.96176600456238,
+      51.57507348060608
+    ],
+    "infer_time_sec_mean": 0.8739159584045411,
+    "infer_time_sec_std": 0.03777844471164551,
+    "infer_time_sec_min": 0.8179035186767578,
+    "infer_time_sec_max": 0.9192459583282471,
+    "infer_time_sec_values": [
+      0.8639509677886963,
+      0.9192459583282471,
+      0.8556792736053467,
+      0.8179035186767578,
+      0.9128000736236572
+    ],
+    "epochs_run_mean": 13.6,
+    "epochs_run_std": 3.1368774282716245,
+    "epochs_run_min": 9.0,
+    "epochs_run_max": 18.0,
+    "epochs_run_values": [
+      9.0,
+      13.0,
+      18.0,
+      12.0,
+      16.0
+    ]
+  },
+  "dataset_name": "Helpdesk"
+}

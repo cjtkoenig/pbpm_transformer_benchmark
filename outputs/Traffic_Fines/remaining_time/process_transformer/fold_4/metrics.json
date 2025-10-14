@@ -1,0 +1,19 @@
+{
+  "val_loss": 75575.0234375,
+  "val_mae": 193.49659729003906,
+  "mae": 193.49685668945312,
+  "mse": 75574.984375,
+  "r2": 0.30007779598236084,
+  "train_time_sec": 341.8032786846161,
+  "infer_time_sec": 16.423292636871338,
+  "param_count": 36333,
+  "best_epoch": 2,
+  "epochs_run": 5,
+  "early_stopped": true,
+  "early_stopping": {
+    "monitor": "val_loss",
+    "mode": "min",
+    "min_delta": 0.001,
+    "patience": 3
+  }
+}

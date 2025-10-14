@@ -1,0 +1,193 @@
+{
+  "fold_metrics": [
+    {
+      "next_activity_accuracy": 0.35893472285493455,
+      "next_time_mae": 212.54953002929688,
+      "next_time_mse": 344914.34375,
+      "next_time_r2": 0.29465293884277344,
+      "remaining_time_mae": 51.345359802246094,
+      "remaining_time_mse": 4908.7353515625,
+      "remaining_time_r2": 0.21333205699920654,
+      "param_count": 161468,
+      "train_time_sec": 7601.050879716873,
+      "infer_time_sec": 47.704070806503296,
+      "epochs_run": 19
+    },
+    {
+      "next_activity_accuracy": 0.3482409434069659,
+      "next_time_mae": 237.87989807128906,
+      "next_time_mse": 353495.5,
+      "next_time_r2": 0.2784021496772766,
+      "remaining_time_mae": 53.0600700378418,
+      "remaining_time_mse": 4959.767578125,
+      "remaining_time_r2": 0.1925988793373108,
+      "param_count": 161468,
+      "train_time_sec": 3237.8993566036224,
+      "infer_time_sec": 48.352083683013916,
+      "epochs_run": 8
+    },
+    {
+      "next_activity_accuracy": 0.32733313446959955,
+      "next_time_mae": 214.7147216796875,
+      "next_time_mse": 344102.875,
+      "next_time_r2": 0.28863441944122314,
+      "remaining_time_mae": 49.161033630371094,
+      "remaining_time_mse": 4829.37890625,
+      "remaining_time_r2": 0.20686715841293335,
+      "param_count": 161468,
+      "train_time_sec": 6518.477473020554,
+      "infer_time_sec": 47.41847634315491,
+      "epochs_run": 16
+    },
+    {
+      "next_activity_accuracy": 0.41836537973720256,
+      "next_time_mae": 213.4505615234375,
+      "next_time_mse": 348047.125,
+      "next_time_r2": 0.2866821885108948,
+      "remaining_time_mae": 50.38995361328125,
+      "remaining_time_mse": 5045.71826171875,
+      "remaining_time_r2": 0.2072213888168335,
+      "param_count": 161468,
+      "train_time_sec": 5300.953147411346,
+      "infer_time_sec": 47.69444251060486,
+      "epochs_run": 13
+    },
+    {
+      "next_activity_accuracy": 0.3682051547995644,
+      "next_time_mae": 212.85565185546875,
+      "next_time_mse": 345777.46875,
+      "next_time_r2": 0.28806161880493164,
+      "remaining_time_mae": 50.19480514526367,
+      "remaining_time_mse": 4909.06689453125,
+      "remaining_time_r2": 0.20356500148773193,
+      "param_count": 161468,
+      "train_time_sec": 4491.007354736328,
+      "infer_time_sec": 47.10941767692566,
+      "epochs_run": 11
+    }
+  ],
+  "cv_summary": {
+    "next_activity_accuracy_mean": 0.3642158670536534,
+    "next_activity_accuracy_std": 0.030303494098923682,
+    "next_activity_accuracy_min": 0.32733313446959955,
+    "next_activity_accuracy_max": 0.41836537973720256,
+    "next_activity_accuracy_values": [
+      0.35893472285493455,
+      0.3482409434069659,
+      0.32733313446959955,
+      0.41836537973720256,
+      0.3682051547995644
+    ],
+    "next_time_mae_mean": 218.29007263183593,
+    "next_time_mae_std": 9.82295293171827,
+    "next_time_mae_min": 212.54953002929688,
+    "next_time_mae_max": 237.87989807128906,
+    "next_time_mae_values": [
+      212.54953002929688,
+      237.87989807128906,
+      214.7147216796875,
+      213.4505615234375,
+      212.85565185546875
+    ],
+    "next_time_mse_mean": 347267.4625,
+    "next_time_mse_std": 3381.366232371447,
+    "next_time_mse_min": 344102.875,
+    "next_time_mse_max": 353495.5,
+    "next_time_mse_values": [
+      344914.34375,
+      353495.5,
+      344102.875,
+      348047.125,
+      345777.46875
+    ],
+    "next_time_r2_mean": 0.28728666305541994,
+    "next_time_r2_std": 0.005214959062272908,
+    "next_time_r2_min": 0.2784021496772766,
+    "next_time_r2_max": 0.29465293884277344,
+    "next_time_r2_values": [
+      0.29465293884277344,
+      0.2784021496772766,
+      0.28863441944122314,
+      0.2866821885108948,
+      0.28806161880493164
+    ],
+    "remaining_time_mae_mean": 50.83024444580078,
+    "remaining_time_mae_std": 1.3131161311614539,
+    "remaining_time_mae_min": 49.161033630371094,
+    "remaining_time_mae_max": 53.0600700378418,
+    "remaining_time_mae_values": [
+      51.345359802246094,
+      53.0600700378418,
+      49.161033630371094,
+      50.38995361328125,
+      50.19480514526367
+    ],
+    "remaining_time_mse_mean": 4930.5333984375,
+    "remaining_time_mse_std": 71.12016158355384,
+    "remaining_time_mse_min": 4829.37890625,
+    "remaining_time_mse_max": 5045.71826171875,
+    "remaining_time_mse_values": [
+      4908.7353515625,
+      4959.767578125,
+      4829.37890625,
+      5045.71826171875,
+      4909.06689453125
+    ],
+    "remaining_time_r2_mean": 0.20471689701080323,
+    "remaining_time_r2_std": 0.006830670546306497,
+    "remaining_time_r2_min": 0.1925988793373108,
+    "remaining_time_r2_max": 0.21333205699920654,
+    "remaining_time_r2_values": [
+      0.21333205699920654,
+      0.1925988793373108,
+      0.20686715841293335,
+      0.2072213888168335,
+      0.20356500148773193
+    ],
+    "param_count_mean": 161468.0,
+    "param_count_std": 0.0,
+    "param_count_min": 161468.0,
+    "param_count_max": 161468.0,
+    "param_count_values": [
+      161468.0,
+      161468.0,
+      161468.0,
+      161468.0,
+      161468.0
+    ],
+    "train_time_sec_mean": 5429.877642297744,
+    "train_time_sec_std": 1523.2800507809914,
+    "train_time_sec_min": 3237.8993566036224,
+    "train_time_sec_max": 7601.050879716873,
+    "train_time_sec_values": [
+      7601.050879716873,
+      3237.8993566036224,
+      6518.477473020554,
+      5300.953147411346,
+      4491.007354736328
+    ],
+    "infer_time_sec_mean": 47.655698204040526,
+    "infer_time_sec_std": 0.4107287160333698,
+    "infer_time_sec_min": 47.10941767692566,
+    "infer_time_sec_max": 48.352083683013916,
+    "infer_time_sec_values": [
+      47.704070806503296,
+      48.352083683013916,
+      47.41847634315491,
+      47.69444251060486,
+      47.10941767692566
+    ],
+    "epochs_run_mean": 13.4,
+    "epochs_run_std": 3.8262252939417984,
+    "epochs_run_min": 8.0,
+    "epochs_run_max": 19.0,
+    "epochs_run_values": [
+      19.0,
+      8.0,
+      16.0,
+      13.0,
+      11.0
+    ]
+  },
+  "dataset_name": "Tourism"
+}

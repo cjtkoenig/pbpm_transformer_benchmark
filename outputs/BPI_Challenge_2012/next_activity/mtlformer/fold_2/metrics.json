@@ -1,0 +1,7 @@
+{
+  "accuracy": 0.6405958645837649,
+  "train_time_sec": 1254.0497512817383,
+  "infer_time_sec": 12.12448787689209,
+  "param_count": 143093,
+  "epochs_run": 12
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "dataset": "Tourism",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 0,
+    "value": 0.07325,
+    "train_time_seconds": 3592.9341644159977,
+    "params": 62949869.0,
+    "splits": "cv-kfold-5",
+    "run": "tourism-train"
+  },
+  {
+    "dataset": "Tourism",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 1,
+    "value": 0.07181,
+    "train_time_seconds": 7140.237245372999,
+    "params": 62949869.0,
+    "splits": "cv-kfold-5",
+    "run": "tourism-train"
+  },
+  {
+    "dataset": "Tourism",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 2,
+    "value": 0.07022,
+    "train_time_seconds": 6626.814867082001,
+    "params": 62949869.0,
+    "splits": "cv-kfold-5",
+    "run": "tourism-train"
+  },
+  {
+    "dataset": "Tourism",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 3,
+    "value": 0.07102,
+    "train_time_seconds": 4844.186223666009,
+    "params": 62949869.0,
+    "splits": "cv-kfold-5",
+    "run": "tourism-train"
+  },
+  {
+    "dataset": "Tourism",
+    "task": "remaining_time",
+    "model": "pgtnet",
+    "metric": "mae",
+    "fold": 4,
+    "value": 0.07247,
+    "train_time_seconds": 4825.947199752991,
+    "params": 62949869.0,
+    "splits": "cv-kfold-5",
+    "run": "tourism-train"
+  }
+]

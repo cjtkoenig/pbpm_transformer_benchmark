@@ -1,0 +1,112 @@
+{
+  "fold_results": [
+    {
+      "fold_idx": 0,
+      "metrics": {
+        "accuracy": 0.2422811478387214,
+        "train_time_sec": 88.60201025009155,
+        "infer_time_sec": 1.206270694732666,
+        "param_count": 142253,
+        "epochs_run": 13
+      }
+    },
+    {
+      "fold_idx": 1,
+      "metrics": {
+        "accuracy": 0.2500838082467315,
+        "train_time_sec": 65.62656617164612,
+        "infer_time_sec": 1.2222316265106201,
+        "param_count": 142253,
+        "epochs_run": 10
+      }
+    },
+    {
+      "fold_idx": 2,
+      "metrics": {
+        "accuracy": 0.2663404404054526,
+        "train_time_sec": 49.164897203445435,
+        "infer_time_sec": 1.2632417678833008,
+        "param_count": 142253,
+        "epochs_run": 7
+      }
+    },
+    {
+      "fold_idx": 3,
+      "metrics": {
+        "accuracy": 0.2310554803788904,
+        "train_time_sec": 43.044442653656006,
+        "infer_time_sec": 1.3556466102600098,
+        "param_count": 142253,
+        "epochs_run": 6
+      }
+    },
+    {
+      "fold_idx": 4,
+      "metrics": {
+        "accuracy": 0.3114374034003091,
+        "train_time_sec": 50.731648445129395,
+        "infer_time_sec": 1.1839287281036377,
+        "param_count": 142253,
+        "epochs_run": 7
+      }
+    }
+  ],
+  "cv_summary": {
+    "accuracy_mean": 0.260239656054021,
+    "accuracy_std": 0.028056351419518972,
+    "accuracy_min": 0.2310554803788904,
+    "accuracy_max": 0.3114374034003091,
+    "accuracy_values": [
+      0.2422811478387214,
+      0.2500838082467315,
+      0.2663404404054526,
+      0.2310554803788904,
+      0.3114374034003091
+    ],
+    "train_time_sec_mean": 59.433912944793704,
+    "train_time_sec_std": 16.3641295676955,
+    "train_time_sec_min": 43.044442653656006,
+    "train_time_sec_max": 88.60201025009155,
+    "train_time_sec_values": [
+      88.60201025009155,
+      65.62656617164612,
+      49.164897203445435,
+      43.044442653656006,
+      50.731648445129395
+    ],
+    "infer_time_sec_mean": 1.2462638854980468,
+    "infer_time_sec_std": 0.06052355837797297,
+    "infer_time_sec_min": 1.1839287281036377,
+    "infer_time_sec_max": 1.3556466102600098,
+    "infer_time_sec_values": [
+      1.206270694732666,
+      1.2222316265106201,
+      1.2632417678833008,
+      1.3556466102600098,
+      1.1839287281036377
+    ],
+    "param_count_mean": 142253.0,
+    "param_count_std": 0.0,
+    "param_count_min": 142253.0,
+    "param_count_max": 142253.0,
+    "param_count_values": [
+      142253.0,
+      142253.0,
+      142253.0,
+      142253.0,
+      142253.0
+    ],
+    "epochs_run_mean": 8.6,
+    "epochs_run_std": 2.5768197453450252,
+    "epochs_run_min": 6.0,
+    "epochs_run_max": 13.0,
+    "epochs_run_values": [
+      13.0,
+      10.0,
+      7.0,
+      6.0,
+      7.0
+    ]
+  },
+  "dataset_name": "Sepsis"
+}

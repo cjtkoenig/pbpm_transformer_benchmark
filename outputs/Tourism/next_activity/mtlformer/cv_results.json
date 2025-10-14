@@ -1,0 +1,112 @@
+{
+  "fold_results": [
+    {
+      "fold_idx": 0,
+      "metrics": {
+        "accuracy": 0.35893472285493455,
+        "train_time_sec": 7601.050879716873,
+        "infer_time_sec": 47.704070806503296,
+        "param_count": 161468,
+        "epochs_run": 19
+      }
+    },
+    {
+      "fold_idx": 1,
+      "metrics": {
+        "accuracy": 0.3482409434069659,
+        "train_time_sec": 3237.8993566036224,
+        "infer_time_sec": 48.352083683013916,
+        "param_count": 161468,
+        "epochs_run": 8
+      }
+    },
+    {
+      "fold_idx": 2,
+      "metrics": {
+        "accuracy": 0.32733313446959955,
+        "train_time_sec": 6518.477473020554,
+        "infer_time_sec": 47.41847634315491,
+        "param_count": 161468,
+        "epochs_run": 16
+      }
+    },
+    {
+      "fold_idx": 3,
+      "metrics": {
+        "accuracy": 0.41836537973720256,
+        "train_time_sec": 5300.953147411346,
+        "infer_time_sec": 47.69444251060486,
+        "param_count": 161468,
+        "epochs_run": 13
+      }
+    },
+    {
+      "fold_idx": 4,
+      "metrics": {
+        "accuracy": 0.3682051547995644,
+        "train_time_sec": 4491.007354736328,
+        "infer_time_sec": 47.10941767692566,
+        "param_count": 161468,
+        "epochs_run": 11
+      }
+    }
+  ],
+  "cv_summary": {
+    "accuracy_mean": 0.3642158670536534,
+    "accuracy_std": 0.030303494098923682,
+    "accuracy_min": 0.32733313446959955,
+    "accuracy_max": 0.41836537973720256,
+    "accuracy_values": [
+      0.35893472285493455,
+      0.3482409434069659,
+      0.32733313446959955,
+      0.41836537973720256,
+      0.3682051547995644
+    ],
+    "train_time_sec_mean": 5429.877642297744,
+    "train_time_sec_std": 1523.2800507809914,
+    "train_time_sec_min": 3237.8993566036224,
+    "train_time_sec_max": 7601.050879716873,
+    "train_time_sec_values": [
+      7601.050879716873,
+      3237.8993566036224,
+      6518.477473020554,
+      5300.953147411346,
+      4491.007354736328
+    ],
+    "infer_time_sec_mean": 47.655698204040526,
+    "infer_time_sec_std": 0.4107287160333698,
+    "infer_time_sec_min": 47.10941767692566,
+    "infer_time_sec_max": 48.352083683013916,
+    "infer_time_sec_values": [
+      47.704070806503296,
+      48.352083683013916,
+      47.41847634315491,
+      47.69444251060486,
+      47.10941767692566
+    ],
+    "param_count_mean": 161468.0,
+    "param_count_std": 0.0,
+    "param_count_min": 161468.0,
+    "param_count_max": 161468.0,
+    "param_count_values": [
+      161468.0,
+      161468.0,
+      161468.0,
+      161468.0,
+      161468.0
+    ],
+    "epochs_run_mean": 13.4,
+    "epochs_run_std": 3.8262252939417984,
+    "epochs_run_min": 8.0,
+    "epochs_run_max": 19.0,
+    "epochs_run_values": [
+      19.0,
+      8.0,
+      16.0,
+      13.0,
+      11.0
+    ]
+  },
+  "dataset_name": "Tourism"
+}
