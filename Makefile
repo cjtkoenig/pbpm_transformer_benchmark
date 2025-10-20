@@ -293,12 +293,12 @@ smoke_test_activity_only_lstm: dirs
 .PHONY: smoke_test_specialised_lstm
 smoke_test_specialised_lstm: dirs
 	@echo "=== Smoke: specialised_lstm next_activity on Helpdesk (2 epochs, extended attrs) ==="; \
-	uv run python -m src.cli model.name=specialised_lstm task=next_activity data.datasets="[\"Sepsis\"]" data.attribute_mode=extended train.max_epochs=1;
+	uv run python -m src.cli model.name=specialised_lstm task=next_activity data.datasets="[\"Sepsis\"]" train.max_epochs=1;
 
 .PHONY: smoke_test_shared_lstm
 smoke_test_shared_lstm: dirs
 	@echo "=== Smoke: shared_lstm next_activity on Helpdesk (2 epochs, extended attrs) ==="; \
-	uv run python -m src.cli model.name=shared_lstm task=next_activity data.datasets="[\"Tourism\"]" data.attribute_mode=extended train.max_epochs=1;
+	uv run python -m src.cli model.name=shared_lstm task=next_activity data.datasets="[\"Tourism\"]" train.max_epochs=1;
 
 run_mtl_former_again: dirs
 	@echo "=== PBPM Benchmark: MTLFormer with efficiency metrics ==="; \
@@ -306,43 +306,36 @@ run_mtl_former_again: dirs
 	UV="uv run python -m src.cli"; \
 	DATASETS="[\"BPI_Challenge_2012\", \"Helpdesk\", \"Traffic_Fines\", \"Sepsis\", \"Tourism\"]"; \
 	echo "--- MTLFormer: multitask ---"; \
-	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
+	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" || exit $$?; \
 
-# ===== Minimal Benchmark Run =====
-.PHONY: run_benchmark_minimal_mode
-run_benchmark_minimal_mode: dirs
+
+# === BENCHMARK RUN ===
+.PHONY: run_benchmark
+run_benchmark: dirs
 	@echo "=== PBPM Benchmark: Minimal Mode (activities only) ==="; \
 	echo "Datasets: BPI_Challenge_2012, Helpdesk, Traffic_Fines, Sepsis, Tourism"; \
 	echo "Step 1/2: Force preprocessing for all datasets..."; \
 	UV="uv run python -m src.cli"; \
 	DATASETS="[\"BPI_Challenge_2012\", \"Helpdesk\", \"Traffic_Fines\", \"Sepsis\", \"Tourism\"]"; \
-	$$UV preprocess_action=force data.datasets="$$DATASETS" data.attribute_mode=extended || exit $$?; \
-	echo "Step 2/2: Train/Evaluate all models and tasks (using config-defined epochs and per-model learning rates, attribute_mode=minimal)"; \
+	$$UV preprocess_action=force data.datasets="$$DATASETS" || exit $$?; \
+	echo "Step 2/2: Train/Evaluate all models and tasks (using config-defined epochs and per-model learning rates)"; \
 	echo "--- ProcessTransformer: next_activity ---"; \
-	$$UV model.name=process_transformer task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
+	$$UV model.name=process_transformer task=next_activity data.datasets="$$DATASETS" || exit $$?; \
 	echo "--- ProcessTransformer: next_time ---"; \
-	$$UV model.name=process_transformer task=next_time data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
+	$$UV model.name=process_transformer task=next_time data.datasets="$$DATASETS" || exit $$?; \
 	echo "--- ProcessTransformer: remaining_time ---"; \
-	$$UV model.name=process_transformer task=remaining_time data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
+	$$UV model.name=process_transformer task=remaining_time data.datasets="$$DATASETS" || exit $$?; \
 	echo "--- MTLFormer: multitask ---"; \
-	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
+	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" || exit $$?; \
 	echo "--- Activity-Only LSTM: next_activity ---"; \
-	$$UV model.name=activity_only_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=minimal || exit $$?; \
+	$$UV model.name=activity_only_lstm task=next_activity data.datasets="$$DATASETS" || exit $$?; \
 	echo "=== Benchmark completed. Outputs written under outputs/ ==="; \
-	echo "Note: outputs/env.json is overwritten by each run; refer to per-model outputs under outputs/<dataset>/<task>/<model>/";
-
-# ===== Extended Benchmark Run =====
-.PHONY: run_benchmark_extended_mode
-run_benchmark_extended_mode: dirs
-	@echo "=== PBPM Benchmark: Extended Mode (LSTMs) ==="; \
-	UV="uv run python -m src.cli"; \
-	DATASETS="[\"BPI_Challenge_2012\", \"Helpdesk\", \"Traffic_Fines\", \"Sepsis\", \"Tourism\"]"; \
-	echo "Force preprocessing for all datasets (extended ready)"; \
 	$$UV preprocess_action=force data.datasets="$$DATASETS" || exit $$?; \
 	echo "--- specialised_lstm (next_activity, extended) ---"; \
-	$$UV model.name=specialised_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=extended || exit $$?; \
+	$$UV model.name=specialised_lstm task=next_activity data.datasets="$$DATASETS" || exit $$?; \
 	echo "--- shared_lstm (next_activity, extended) ---"; \
-	$$UV model.name=shared_lstm task=next_activity data.datasets="$$DATASETS" data.attribute_mode=extended || exit $$?;
+	$$UV model.name=shared_lstm task=next_activity data.datasets="$$DATASETS" || exit $$?;
+	echo "Note: outputs/env.json is overwritten by each run; refer to per-model outputs under outputs/<dataset>/<task>/<model>/";
 
 .PHONY: thesis_report
 thesis_report: dirs

@@ -112,33 +112,15 @@ def main(config: DictConfig):
             "Invalid configuration: process_transformer does not support task=multitask. "
             "Please choose one of: next_activity, next_time, remaining_time"
         )
-    # Enforce minimal attribute mode for ProcessTransformer and MTLFormer
-    if model_name in {"process_transformer", "mtlformer"}:
-        attr_mode = str(getattr(config.data, 'attribute_mode', 'minimal'))
-        if attr_mode != 'minimal':
-            raise ValueError(
-                "Invalid configuration: process_transformer and mtlformer only support data.attribute_mode=minimal in this benchmark."
-            )
+    # Enforce model-task compatibility
     if model_name == "activity_only_lstm":
         if task_name != "next_activity":
             raise ValueError(
                 "Invalid configuration: activity_only_lstm supports only task=next_activity."
             )
-        attr_mode = str(getattr(config.data, 'attribute_mode', 'minimal'))
-        if attr_mode != 'minimal':
-            raise ValueError(
-                "Invalid configuration: activity_only_lstm is an activities-only model. "
-                "Please set data.attribute_mode=minimal."
-            )
     if model_name in {"shared_lstm", "specialised_lstm"}:
         if task_name != "next_activity":
             raise ValueError("Invalid configuration: shared_lstm/specialised_lstm support only task=next_activity.")
-        attr_mode = str(getattr(config.data, 'attribute_mode', 'minimal'))
-        if attr_mode != 'extended':
-            raise ValueError(
-                "Invalid configuration: shared_lstm and specialised_lstm are reserved for extended attribute mode. "
-                "Please set data.attribute_mode=extended. For activities-only, use model.name=activity_only_lstm."
-            )
     
     # Validate dataset availability and correctness for the chosen model/task/mode
     try:
@@ -219,7 +201,6 @@ def main(config: DictConfig):
         "seed": int(config.seed),
         "task": config.task,
         "model": config.model.name,
-        "data_attribute_mode": getattr(config.data, 'attribute_mode', None),
         "track": track,
     }
     (outputs_dir / "env.json").write_text(json.dumps(env_info, indent=2))

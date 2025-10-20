@@ -84,7 +84,7 @@ See: External Results Ingestion section below.
 ## Datasets and Preprocessing
 - Place raw CSV logs in data/raw with at least columns case:concept:name, concept:name, and timestamps where required.
 - Preprocessing runs on first use and caches under data/processed/.
-- Two attribute modes: minimal (activities only) and extended (if model supports attributes).
+- if model supports attributes such as resources we use it.
 
 Manage preprocessing
 ```bash
@@ -103,7 +103,7 @@ uv run python -m src.cli preprocess_action=clear
 Note: You can also force preprocessing during a task run via Hydra override:
 `uv run python -m src.cli task=next_activity data.datasets="[Helpdesk]" force_preprocess=true`
 
-Dataset-specific attribute handling (extended mode)
+Dataset-specific attribute handling
 - Tourism: If column `event_log_activity_type` is present, it is treated as a categorical resource-like attribute by stringifying and normalizing tokens.
 - Traffic Fines: Prefer `vehicleClass` (4 categories). It is forward-filled per case to all events and used as the resource-like attribute. If `vehicleClass` is absent, we fall back to `org:resource`.
   - Missing values are mapped to [UNK].
@@ -233,7 +233,7 @@ uv run python -m src.cli task=next_activity model.hidden_size=512 model.num_laye
 uv run python -m src.cli task=next_activity train.max_epochs=20 train.batch_size=64
 
 # Override data params
-uv run python -m src.cli task=next_activity data.max_prefix_length=20 data.attribute_mode=extended
+uv run python -m src.cli task=next_activity data.max_prefix_length=20
 
 # Choose datasets
 uv run python -m src.cli task=next_activity data.datasets="[Helpdesk,Tourism]"
@@ -258,12 +258,12 @@ Allowed
 Not allowed
 - Changing splits, re-encoding vocab/labels, altering normalization/time units, filtering/augmenting data.
 
-Implemented models
-Experiment Run 1: attribute_mode=minimal (activities only)
-- process_transformer (TensorFlow)
-- mtlformer (TensorFlow)
-- specialised_lstm (TensorFlow; next_activity only)
-- shared_lstm (TensorFlow; next_activity only)
+Implemented models (and expected inputs)
+- process_transformer (TensorFlow) — activities + time features (canonical)
+- mtlformer (TensorFlow; multitask only) — activities + time features
+- activity_only_lstm (TensorFlow; next_activity only) — activities only
+- specialised_lstm (TensorFlow; next_activity only) — extended attributes (activities, resource/group, delta time)
+- shared_lstm (TensorFlow; next_activity only) — extended attributes (activities, resource/group, delta time)
 
 ## Metrics
 - Next Activity: Accuracy (primary), optionally F1.
@@ -391,11 +391,10 @@ make run_benchmark_minimal_mode
 ```
 What it does
 - Forces preprocessing for datasets: ["BPI_Challenge_2012", "Helpdesk", "Traffic_Fines", "Sepsis", "Tourism"].
-- Trains/evaluates using config-defined epochs and per-model learning rates with data.attribute_mode=minimal:
+- Trains/evaluates using config-defined epochs and per-model learning rates:
   - ProcessTransformer on: next_activity, next_time, remaining_time
   - MTLFormer on: multitask
-  - Specialised LSTM on: next_activity
-  - Shared LSTM on: next_activity
+  - Activity-Only LSTM on: next_activity
 
 Notes
 - Early stopping is enabled and configurable via train.early_stopping_* in configs/benchmark.yaml. Defaults: patience=3, min_delta=0.001, monitor=val_loss, mode=min, restore_best_weights=true. For Next-Activity you may set train.early_stopping_monitor=val_accuracy and train.early_stopping_mode=max. This keeps runs time-bounded while still allowing warmup/regularization.

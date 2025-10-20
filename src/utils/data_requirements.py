@@ -28,12 +28,12 @@ def _load_any_fold(processed_dir: Path, dataset: str, task: str) -> pd.DataFrame
 
 
 def validate_datasets_or_raise(config: DictConfig, project_root: Path) -> None:
-    """Validate that the correct processed datasets exist for the selected model/task/mode.
+    """Validate that the correct processed datasets exist for the selected model/task.
 
     Rules implemented:
-    - Minimal-mode models (process_transformer, mtlformer, activity_only_lstm):
+    - Models that use only activities/time (process_transformer, mtlformer, activity_only_lstm):
       Accept canonical processed datasets regardless of presence of extended columns.
-    - Extended-mode next-activity models (shared_lstm, specialised_lstm):
+    - Extended next-activity models (shared_lstm, specialised_lstm):
       Require extended columns in canonical next_activity splits. If missing, raise
       with instructions to force preprocessing.
     - PGTNet (remaining_time only):
@@ -42,7 +42,6 @@ def validate_datasets_or_raise(config: DictConfig, project_root: Path) -> None:
     """
     model = str(getattr(config.model, "name", "process_transformer"))
     task = str(getattr(config, "task", "next_activity"))
-    attr_mode = str(getattr(config.data, "attribute_mode", "minimal"))
 
     processed_dir = project_root / getattr(config.data, "path_processed", "data/processed")
     datasets: List[str] = list(getattr(config.data, "datasets", []) or [])
@@ -60,8 +59,8 @@ def validate_datasets_or_raise(config: DictConfig, project_root: Path) -> None:
 
     # Extended models require extended columns
     if model in {"shared_lstm", "specialised_lstm"}:
-        if task != "next_activity" or attr_mode != "extended":
-            # The CLI already enforces this combination, so just return
+        if task != "next_activity":
+            # These models are only used for next_activity; no further checks needed here.
             return
         for ds in datasets:
             df = _load_any_fold(processed_dir, ds, task="next_activity")

@@ -49,11 +49,10 @@ class NextActivityTask:
         # For now, we'll load fold 0 to get the structure
         train_df, val_df = data_loader.load_fold_data("next_activity", 0)
 
-        # If we are in extended attribute mode with an extended-only model, ensure required columns exist;
+        # If the selected model requires extended attributes, ensure required columns exist;
         # if missing, trigger a forced reprocess to rebuild splits with extended attributes and reload.
         model_name = str(self.config.get("model", {}).get("name", ""))
-        attr_mode = str(self.config.get("data", {}).get("attribute_mode", "minimal"))
-        requires_extended = model_name in {"shared_lstm", "specialised_lstm"} and attr_mode == "extended"
+        requires_extended = model_name in {"shared_lstm", "specialised_lstm"}
         if requires_extended:
             missing_cols = [c for c in ["resource_prefix", "delta_t_prefix"] if c not in train_df.columns or c not in val_df.columns]
             if missing_cols:
@@ -145,7 +144,6 @@ class NextActivityTask:
             embed_dim=embed_dim,
             num_heads=num_heads,
             ff_dim=ff_dim,
-            attribute_mode=self.config.get("data", {}).get("attribute_mode", "minimal"),
             processed_dir=str(self.config.get("data", {}).get("path_processed", "data/processed")),
         )
         # Always pass dataset_name when available to allow model factories

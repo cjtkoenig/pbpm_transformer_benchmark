@@ -19,7 +19,7 @@ Why this design?
 How to use this model now
 - Do NOT call this directly in scripts. Use the registry and adapter via the CLI:
   uv run python -m src.cli task=next_activity model.name=shared_lstm \
-    data.attribute_mode=extended data.datasets="[Helpdesk]"
+    data.datasets="[Helpdesk]"
 - The registry builds the Keras model from here and the SharedLSTMAdapter provides input tensors:
   [ac_input, rl_input, t_input] aligned along time, with shapes:
     ac_input: [B, T] int32 activity tokens

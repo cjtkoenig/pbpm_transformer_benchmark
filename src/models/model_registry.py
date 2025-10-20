@@ -144,14 +144,8 @@ class ModelRegistry:
     
     def _create_process_transformer(self, task: str, **kwargs) -> keras.Model:
         """Create Process Transformer model for PBPM tasks.
-        Restricted to minimal attribute mode by design for this benchmark.
+        Model expects canonical minimal inputs as per adapter.
         """
-        # Enforce minimal attribute mode
-        attr_mode = kwargs.get("attribute_mode", "minimal")
-        if attr_mode != "minimal":
-            raise NotImplementedError(
-                "process_transformer supports only data.attribute_mode='minimal' in this benchmark."
-            )
         max_case_length = kwargs.get("max_case_length", 50)
         vocab_size = kwargs.get("vocab_size", 1000)
         embed_dim = kwargs.get("embed_dim", 36)
@@ -202,16 +196,11 @@ class ModelRegistry:
     
     def _create_mtlformer(self, task: str, **kwargs) -> keras.Model:
         """Create MTLFormer model.
-        In this benchmark setup, MTLFormer is only allowed for task='multitask' and minimal attribute mode.
+        In this benchmark setup, MTLFormer is only allowed for task='multitask'.
+        Attribute mode removed; model expects canonical minimal inputs as per adapter.
         """
         if task != "multitask":
             raise NotImplementedError("MTLFormer in this benchmark only supports task='multitask'. Run the MultiTaskLearningTask and compare per-task reports.")
-        # Enforce minimal attribute mode for MTLFormer
-        attr_mode = kwargs.get("attribute_mode", "minimal")
-        if attr_mode != "minimal":
-            raise NotImplementedError(
-                "mtlformer supports only data.attribute_mode='minimal' in this benchmark."
-            )
         max_case_length = kwargs.get("max_case_length", 50)
         vocab_size = kwargs.get("vocab_size", 1000)
         embed_dim = kwargs.get("embed_dim", 36)
@@ -271,12 +260,9 @@ def get_adapter(name: str, task: str) -> ModelAdapter:
 
 
 def activity_only_lstm_factory(task: str, **kwargs):
-    """Factory for activity_only_lstm (supports only next_activity, minimal)."""
+    """Factory for activity_only_lstm (supports only next_activity; activities-only inputs)."""
     if task != "next_activity":
         raise NotImplementedError("activity_only_lstm supports only task='next_activity'")
-    attr_mode = kwargs.get("attribute_mode", "minimal")
-    if attr_mode != "minimal":
-        raise NotImplementedError("activity_only_lstm supports only attribute_mode='minimal'")
     from .activity_only_lstm import get_next_activity_model as get_wick
     return get_wick(
         max_case_length=kwargs.get("max_case_length", 50),
@@ -288,19 +274,15 @@ def activity_only_lstm_factory(task: str, **kwargs):
         dropout_input=kwargs.get("dropout_input", 0.15),
         dropout_context=kwargs.get("dropout_context", 0.15),
         l2reg=kwargs.get("l2reg", 1e-4),
-        attribute_mode=attr_mode,
     )
 
 
 def shared_lstm_factory(task: str, **kwargs):
-    """Factory for shared_lstm (extended attribute mode only, next_activity).
+    """Factory for shared_lstm (next_activity, expects extended inputs from adapter).
     Requires dataset metadata to obtain resource vocab size if not provided.
     """
     if task != "next_activity":
         raise NotImplementedError("shared_lstm supports only task='next_activity'")
-    attr_mode = kwargs.get("attribute_mode", "extended")
-    if attr_mode != "extended":
-        raise NotImplementedError("shared_lstm requires data.attribute_mode='extended'")
     dataset_name = kwargs.get("dataset_name", None)
     rl_vocab_size = kwargs.get("rl_vocab_size", None)
     if rl_vocab_size is None:
@@ -375,14 +357,11 @@ class SpecialisedLSTMAdapter(ModelAdapter):
 
 
 def specialised_lstm_factory(task: str, **kwargs):
-    """Factory for specialised_lstm (extended attribute mode only, next_activity).
+    """Factory for specialised_lstm (next_activity, expects extended inputs from adapter).
     Requires dataset metadata to obtain resource vocab size if not provided.
     """
     if task != "next_activity":
         raise NotImplementedError("specialised_lstm supports only task='next_activity'")
-    attr_mode = kwargs.get("attribute_mode", "extended")
-    if attr_mode != "extended":
-        raise NotImplementedError("specialised_lstm requires data.attribute_mode='extended'")
     dataset_name = kwargs.get("dataset_name", None)
     rl_vocab_size = kwargs.get("rl_vocab_size", None)
     if rl_vocab_size is None:

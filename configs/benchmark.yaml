@@ -14,7 +14,6 @@ data:
   end_of_case_token: "<eoc>"
 
   max_prefix_length: 50
-  attribute_mode: minimal      # minimal (activities only) | extended (each model's speciality)
   datasets: ["BPI_Challenge_2012", "Helpdesk", "Traffic_Fines", "Sepsis", "Tourism"]
 
 model:

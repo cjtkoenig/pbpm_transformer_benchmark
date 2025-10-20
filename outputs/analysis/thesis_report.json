@@ -8,7 +8,7 @@
   },
   "per_task": {
     "next_activity": {
-      "minimal": {
+      "unified": {
         "per_dataset": {
           "BPI_Challenge_2012": {
             "process_transformer": {
@@ -16,19 +16,33 @@
               "lower": 0.756131099872258,
               "upper": 0.7785839389796997,
               "n": 5,
-              "rank": 2
+              "rank": 4
             },
             "mtlformer": {
               "mean": 0.6396363605929418,
               "lower": 0.6224615627688125,
               "upper": 0.6568111584170712,
               "n": 5,
-              "rank": 3
+              "rank": 5
             },
             "activity_only_lstm": {
               "mean": 0.8271926163164366,
               "lower": 0.8264859516266607,
               "upper": 0.8278992810062125,
+              "n": 5,
+              "rank": 3
+            },
+            "shared_lstm": {
+              "mean": 0.8324442752860908,
+              "lower": 0.8271655867244093,
+              "upper": 0.8377229638477722,
+              "n": 5,
+              "rank": 2
+            },
+            "specialised_lstm": {
+              "mean": 0.842619156039202,
+              "lower": 0.839408803110849,
+              "upper": 0.845829508967555,
               "n": 5,
               "rank": 1
             }
@@ -39,21 +53,35 @@
               "lower": 0.817082798248996,
               "upper": 0.8437369249435765,
               "n": 5,
-              "rank": 2
+              "rank": 4
             },
             "mtlformer": {
               "mean": 0.683000882009854,
               "lower": 0.5743549226542998,
               "upper": 0.7916468413654082,
               "n": 5,
-              "rank": 3
+              "rank": 5
             },
             "activity_only_lstm": {
               "mean": 0.8391806147578592,
               "lower": 0.8322350124242334,
               "upper": 0.8461262170914851,
               "n": 5,
+              "rank": 3
+            },
+            "shared_lstm": {
+              "mean": 0.8520065379617063,
+              "lower": 0.845975385516812,
+              "upper": 0.8580376904066007,
+              "n": 5,
               "rank": 1
+            },
+            "specialised_lstm": {
+              "mean": 0.8515405893210065,
+              "lower": 0.8460161200961986,
+              "upper": 0.8570650585458144,
+              "n": 5,
+              "rank": 2
             }
           },
           "Sepsis": {
@@ -62,19 +90,33 @@
               "lower": 0.4463056385293727,
               "upper": 0.5405174686046166,
               "n": 5,
-              "rank": 2
+              "rank": 4
             },
             "mtlformer": {
               "mean": 0.26023965605402105,
               "lower": 0.22129119626980467,
               "upper": 0.2991881158382374,
               "n": 5,
-              "rank": 3
+              "rank": 5
             },
             "activity_only_lstm": {
               "mean": 0.6287887078484564,
               "lower": 0.6119005753770678,
               "upper": 0.6456768403198451,
+              "n": 5,
+              "rank": 2
+            },
+            "shared_lstm": {
+              "mean": 0.6096696717217777,
+              "lower": 0.5314840595465828,
+              "upper": 0.6878552838969725,
+              "n": 5,
+              "rank": 3
+            },
+            "specialised_lstm": {
+              "mean": 0.6426834167287987,
+              "lower": 0.6186703274103666,
+              "upper": 0.6666965060472307,
               "n": 5,
               "rank": 1
             }
@@ -85,19 +127,33 @@
               "lower": 0.5161529437993627,
               "upper": 0.534313343859436,
               "n": 5,
-              "rank": 2
+              "rank": 4
             },
             "mtlformer": {
               "mean": 0.3642158670536534,
               "lower": 0.3221478731229799,
               "upper": 0.4062838609843269,
               "n": 5,
-              "rank": 3
+              "rank": 5
             },
             "activity_only_lstm": {
               "mean": 0.6055573123811593,
               "lower": 0.6007844848190727,
               "upper": 0.6103301399432459,
+              "n": 5,
+              "rank": 2
+            },
+            "shared_lstm": {
+              "mean": 0.5898681959098878,
+              "lower": 0.582721340691989,
+              "upper": 0.5970150511277866,
+              "n": 5,
+              "rank": 3
+            },
+            "specialised_lstm": {
+              "mean": 0.6220695821376316,
+              "lower": 0.6154004465054336,
+              "upper": 0.6287387177698297,
               "n": 5,
               "rank": 1
             }
@@ -108,14 +164,14 @@
               "lower": 0.8111895817076198,
               "upper": 0.8144769373522349,
               "n": 5,
-              "rank": 2
+              "rank": 4
             },
             "mtlformer": {
               "mean": 0.8007743576099948,
               "lower": 0.7956889131579908,
               "upper": 0.8058598020619988,
               "n": 5,
-              "rank": 3
+              "rank": 5
             },
             "activity_only_lstm": {
               "mean": 0.815955791967561,
@@ -123,128 +179,109 @@
               "upper": 0.8169845506509581,
               "n": 5,
               "rank": 1
-            }
-          }
-        }
-      },
-      "extended": {
-        "per_dataset": {
-          "BPI_Challenge_2012": {
-            "shared_lstm": {
-              "mean": 0.8324442752860908,
-              "lower": 0.8271655867244093,
-              "upper": 0.8377229638477722,
-              "n": 5,
-              "uplift_vs_minimal_best": 0.006348773992979162
             },
-            "specialised_lstm": {
-              "mean": 0.842619156039202,
-              "lower": 0.839408803110849,
-              "upper": 0.845829508967555,
-              "n": 5,
-              "uplift_vs_minimal_best": 0.01864927154628289
-            }
-          },
-          "Helpdesk": {
-            "shared_lstm": {
-              "mean": 0.8520065379617063,
-              "lower": 0.845975385516812,
-              "upper": 0.8580376904066007,
-              "n": 5,
-              "uplift_vs_minimal_best": 0.01528386497291524
-            },
-            "specialised_lstm": {
-              "mean": 0.8515405893210065,
-              "lower": 0.8460161200961986,
-              "upper": 0.8570650585458144,
-              "n": 5,
-              "uplift_vs_minimal_best": 0.014728622594211977
-            }
-          },
-          "Sepsis": {
-            "shared_lstm": {
-              "mean": 0.6096696717217777,
-              "lower": 0.5314840595465828,
-              "upper": 0.6878552838969725,
-              "n": 5,
-              "uplift_vs_minimal_best": -0.030406137845730225
-            },
-            "specialised_lstm": {
-              "mean": 0.6426834167287987,
-              "lower": 0.6186703274103666,
-              "upper": 0.6666965060472307,
-              "n": 5,
-              "uplift_vs_minimal_best": 0.022097580167885305
-            }
-          },
-          "Tourism": {
-            "shared_lstm": {
-              "mean": 0.5898681959098878,
-              "lower": 0.582721340691989,
-              "upper": 0.5970150511277866,
-              "n": 5,
-              "uplift_vs_minimal_best": -0.025908557539465697
-            },
-            "specialised_lstm": {
-              "mean": 0.6220695821376316,
-              "lower": 0.6154004465054336,
-              "upper": 0.6287387177698297,
-              "n": 5,
-              "uplift_vs_minimal_best": 0.027267889296131467
-            }
-          },
-          "Traffic_Fines": {
             "shared_lstm": {
               "mean": 0.8155160366534904,
               "lower": 0.8141934704693651,
               "upper": 0.8168386028376157,
               "n": 5,
-              "uplift_vs_minimal_best": -0.0005389450242275771
+              "rank": 3
             },
             "specialised_lstm": {
               "mean": 0.8157118122389916,
               "lower": 0.8143435499263502,
               "upper": 0.817080074551633,
               "n": 5,
-              "uplift_vs_minimal_best": -0.00029901096477427344
+              "rank": 2
             }
           }
         }
       },
       "rankings": {
-        "minimal": {
+        "unified": {
           "task": "next_activity",
           "task_direction": "higher",
           "average_ranks": {
-            "process_transformer": 2.0,
-            "mtlformer": 3.0,
-            "activity_only_lstm": 1.0
+            "process_transformer": 4.0,
+            "mtlformer": 5.0,
+            "activity_only_lstm": 2.2,
+            "shared_lstm": 2.4,
+            "specialised_lstm": 1.4
           },
           "friedman_test": {
-            "statistic": 10.0,
-            "p_value": 0.006737946999085468
+            "statistic": 17.120000000000005,
+            "p_value": 0.0018318804472027667
           },
           "pairwise_tests": {
             "process_transformer__vs__mtlformer": {
               "statistic": 0.0,
               "p_value": 0.0625,
               "mean_difference": -1.0,
-              "model1_mean_rank": 2.0,
-              "model2_mean_rank": 3.0
+              "model1_mean_rank": 4.0,
+              "model2_mean_rank": 5.0
             },
             "process_transformer__vs__activity_only_lstm": {
               "statistic": 0.0,
               "p_value": 0.0625,
-              "mean_difference": 1.0,
-              "model1_mean_rank": 2.0,
-              "model2_mean_rank": 1.0
+              "mean_difference": 1.7999999999999998,
+              "model1_mean_rank": 4.0,
+              "model2_mean_rank": 2.2
+            },
+            "process_transformer__vs__shared_lstm": {
+              "statistic": 0.0,
+              "p_value": 0.0625,
+              "mean_difference": 1.6,
+              "model1_mean_rank": 4.0,
+              "model2_mean_rank": 2.4
+            },
+            "process_transformer__vs__specialised_lstm": {
+              "statistic": 0.0,
+              "p_value": 0.0625,
+              "mean_difference": 2.6,
+              "model1_mean_rank": 4.0,
+              "model2_mean_rank": 1.4
             },
             "mtlformer__vs__activity_only_lstm": {
               "statistic": 0.0,
               "p_value": 0.0625,
-              "mean_difference": 2.0,
-              "model1_mean_rank": 3.0,
-              "model2_mean_rank": 1.0
+              "mean_difference": 2.8,
+              "model1_mean_rank": 5.0,
+              "model2_mean_rank": 2.2
+            },
+            "mtlformer__vs__shared_lstm": {
+              "statistic": 0.0,
+              "p_value": 0.0625,
+              "mean_difference": 2.6,
+              "model1_mean_rank": 5.0,
+              "model2_mean_rank": 2.4
+            },
+            "mtlformer__vs__specialised_lstm": {
+              "statistic": 0.0,
+              "p_value": 0.0625,
+              "mean_difference": 3.6,
+              "model1_mean_rank": 5.0,
+              "model2_mean_rank": 1.4
+            },
+            "activity_only_lstm__vs__shared_lstm": {
+              "statistic": 6.5,
+              "p_value": 1.0,
+              "mean_difference": -0.19999999999999973,
+              "model1_mean_rank": 2.2,
+              "model2_mean_rank": 2.4
+            },
+            "activity_only_lstm__vs__specialised_lstm": {
+              "statistic": 2.5,
+              "p_value": 0.3125,
+              "mean_difference": 0.8000000000000003,
+              "model1_mean_rank": 2.2,
+              "model2_mean_rank": 1.4
+            },
+            "shared_lstm__vs__specialised_lstm": {
+              "statistic": 2.0,
+              "p_value": 0.25,
+              "mean_difference": 1.0,
+              "model1_mean_rank": 2.4,
+              "model2_mean_rank": 1.4
             }
           },
           "summary_statistics": {
@@ -274,34 +311,60 @@
               "max": 0.8391806147578592,
               "n_datasets": 5,
               "cv": 0.13928226201177796
+            },
+            "shared_lstm": {
+              "mean": 0.7399009435065906,
+              "std": 0.11516907951243302,
+              "median": 0.8155160366534904,
+              "min": 0.5898681959098878,
+              "max": 0.8520065379617063,
+              "n_datasets": 5,
+              "cv": 0.15565472719444795
+            },
+            "specialised_lstm": {
+              "mean": 0.754924911293126,
+              "std": 0.10096396259658483,
+              "median": 0.8157118122389916,
+              "min": 0.6220695821376316,
+              "max": 0.8515405893210065,
+              "n_datasets": 5,
+              "cv": 0.13374040396102657
             }
           },
           "plackett_luce": {
             "strengths": [
               0.0,
               -10.0,
+              8.754059888949582,
+              8.342803481219343,
               10.0
             ],
             "probabilities": [
-              4.5397868608866656e-05,
-              2.061060046209062e-09,
-              0.999954600070331
+              3.070906541123541e-05,
+              1.3941894127416407e-09,
+              0.1945837207343985,
+              0.12897338993494203,
+              0.6764121788710589
             ],
-            "log_likelihood": -0.00045399929746739887,
+            "log_likelihood": -7.223663859412453,
             "success": true,
             "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
-            "n_iterations": 12,
+            "n_iterations": 22,
             "model_names": [
               "process_transformer",
               "mtlformer",
-              "activity_only_lstm"
+              "activity_only_lstm",
+              "shared_lstm",
+              "specialised_lstm"
             ],
             "n_datasets": 5,
             "ranking_data": {
               "model_names": [
                 "process_transformer",
                 "mtlformer",
-                "activity_only_lstm"
+                "activity_only_lstm",
+                "shared_lstm",
+                "specialised_lstm"
               ],
               "dataset_names": [
                 "BPI_Challenge_2012",
@@ -313,29 +376,39 @@
               "direction": "higher",
               "rankings": [
                 [
+                  4,
+                  5,
+                  3,
+                  2,
+                  1
+                ],
+                [
+                  4,
+                  5,
+                  3,
+                  1,
+                  2
+                ],
+                [
+                  4,
+                  5,
                   2,
                   3,
                   1
                 ],
                 [
+                  4,
+                  5,
                   2,
                   3,
                   1
                 ],
                 [
-                  2,
+                  4,
+                  5,
+                  1,
                   3,
-                  1
-                ],
-                [
-                  2,
-                  3,
-                  1
-                ],
-                [
-                  2,
-                  3,
-                  1
+                  2
                 ]
               ],
               "n_rankings": 5
@@ -345,86 +418,104 @@
             "trace": "Inference data with groups:\n\t> posterior\n\t> sample_stats\n\t> observed_data",
             "model_effects_summary": {
               "mean": [
-                0.596,
-                0.46,
-                0.654
+                0.553,
+                0.416,
+                0.61,
+                0.606,
+                0.622
               ],
               "sd": [
-                0.207,
-                0.207,
-                0.207
+                0.203,
+                0.203,
+                0.203,
+                0.203,
+                0.204
               ],
               "hdi_3%": [
-                0.16,
-                0.036,
-                0.264
+                0.18,
+                0.051,
+                0.261,
+                0.229,
+                0.26
               ],
               "hdi_97%": [
-                0.962,
-                0.833,
-                1.06
+                0.945,
+                0.814,
+                1.033,
+                0.997,
+                1.034
               ],
               "mcse_mean": [
-                0.007,
-                0.007,
-                0.007
+                0.009,
+                0.009,
+                0.009,
+                0.009,
+                0.009
               ],
               "mcse_sd": [
+                0.005,
+                0.005,
                 0.005,
                 0.005,
                 0.005
               ],
               "ess_bulk": [
-                850.0,
-                838.0,
-                840.0
+                521.0,
+                524.0,
+                522.0,
+                525.0,
+                525.0
               ],
               "ess_tail": [
-                1000.0,
-                988.0,
-                1003.0
+                796.0,
+                795.0,
+                819.0,
+                803.0,
+                822.0
               ],
               "r_hat": [
-                1.0,
-                1.0,
-                1.0
+                1.01,
+                1.01,
+                1.01,
+                1.01,
+                1.01
               ]
             },
             "dataset_effects_summary": {
               "mean": [
-                0.173,
-                0.212,
-                -0.108,
-                -0.072,
-                0.237
+                0.219,
+                0.249,
+                -0.034,
+                -0.02,
+                0.25
               ],
               "sd": [
-                0.208,
-                0.208,
-                0.208,
-                0.209,
-                0.208
+                0.203,
+                0.203,
+                0.203,
+                0.203,
+                0.203
               ],
               "hdi_3%": [
-                -0.222,
-                -0.195,
-                -0.488,
-                -0.449,
-                -0.174
+                -0.199,
+                -0.153,
+                -0.442,
+                -0.411,
+                -0.146
               ],
               "hdi_97%": [
-                0.571,
-                0.606,
-                0.313,
-                0.351,
-                0.627
+                0.57,
+                0.621,
+                0.328,
+                0.36,
+                0.621
               ],
               "mcse_mean": [
-                0.007,
-                0.007,
-                0.007,
-                0.007,
-                0.007
+                0.009,
+                0.009,
+                0.009,
+                0.009,
+                0.009
               ],
               "mcse_sd": [
                 0.005,
@@ -434,138 +525,308 @@
                 0.005
               ],
               "ess_bulk": [
-                866.0,
-                864.0,
-                854.0,
-                851.0,
-                849.0
+                526.0,
+                524.0,
+                518.0,
+                534.0,
+                533.0
               ],
               "ess_tail": [
-                1011.0,
-                998.0,
-                1059.0,
-                969.0,
-                1092.0
+                788.0,
+                818.0,
+                786.0,
+                839.0,
+                824.0
               ],
               "r_hat": [
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0
+                1.01,
+                1.01,
+                1.01,
+                1.01,
+                1.01
               ]
             },
             "pairwise_differences": {
               "process_transformer__vs__mtlformer": {
-                "mean_difference": 0.1363015304350518,
-                "std_difference": 0.0532829234281957,
+                "mean_difference": 0.13624410174202126,
+                "std_difference": 0.03912777989443187,
                 "quantiles": [
-                  0.03208529302321758,
-                  0.10373223323942915,
-                  0.13536904422442816,
-                  0.16889953245870826,
-                  0.2424137298019871
+                  0.058518453821669765,
+                  0.11082089075692189,
+                  0.13660524194589274,
+                  0.16113745919785463,
+                  0.21411107636762172
                 ],
-                "prob_model1_better": 0.991625,
+                "prob_model1_better": 0.999,
                 "credible_interval_95": [
-                  0.03208529302321758,
-                  0.2424137298019871
+                  0.058518453821669765,
+                  0.21411107636762172
                 ],
                 "credible_interval_50": [
-                  0.10373223323942915,
-                  0.16889953245870826
+                  0.11082089075692189,
+                  0.16113745919785463
                 ]
               },
               "process_transformer__vs__activity_only_lstm": {
-                "mean_difference": -0.05768033913075463,
-                "std_difference": 0.05252896784092632,
+                "mean_difference": -0.05691816704578726,
+                "std_difference": 0.03976402353264433,
                 "quantiles": [
-                  -0.16239605567170087,
-                  -0.0899265036572326,
-                  -0.05752996160874452,
-                  -0.02627124359167468,
-                  0.045616413881452024
+                  -0.13565909235665954,
+                  -0.08241390224610345,
+                  -0.057342134824433066,
+                  -0.03126850208360778,
+                  0.023052032433103217
                 ],
-                "prob_model1_better": 0.116875,
+                "prob_model1_better": 0.07025,
                 "credible_interval_95": [
-                  -0.16239605567170087,
-                  0.045616413881452024
+                  -0.13565909235665954,
+                  0.023052032433103217
                 ],
                 "credible_interval_50": [
-                  -0.0899265036572326,
-                  -0.02627124359167468
+                  -0.08241390224610345,
+                  -0.03126850208360778
+                ]
+              },
+              "process_transformer__vs__shared_lstm": {
+                "mean_difference": -0.053870704259862734,
+                "std_difference": 0.03947686504828526,
+                "quantiles": [
+                  -0.13251057513769154,
+                  -0.07940901117029794,
+                  -0.053764800709093064,
+                  -0.028541325685439017,
+                  0.02602376732989892
+                ],
+                "prob_model1_better": 0.077875,
+                "credible_interval_95": [
+                  -0.13251057513769154,
+                  0.02602376732989892
+                ],
+                "credible_interval_50": [
+                  -0.07940901117029794,
+                  -0.028541325685439017
+                ]
+              },
+              "process_transformer__vs__specialised_lstm": {
+                "mean_difference": -0.06913205981951516,
+                "std_difference": 0.039103357096857055,
+                "quantiles": [
+                  -0.14808751885463495,
+                  -0.09413585655860968,
+                  -0.06901108707452966,
+                  -0.04394036011786347,
+                  0.007411789647145016
+                ],
+                "prob_model1_better": 0.036375,
+                "credible_interval_95": [
+                  -0.14808751885463495,
+                  0.007411789647145016
+                ],
+                "credible_interval_50": [
+                  -0.09413585655860968,
+                  -0.04394036011786347
                 ]
               },
               "mtlformer__vs__activity_only_lstm": {
-                "mean_difference": -0.1939818695658064,
-                "std_difference": 0.053638447236447416,
+                "mean_difference": -0.1931622687878085,
+                "std_difference": 0.04030298246026103,
                 "quantiles": [
-                  -0.29820261689646044,
-                  -0.22739143093304848,
-                  -0.19434038343527887,
-                  -0.16059380791240685,
-                  -0.08927500960007076
+                  -0.2721651120059442,
+                  -0.21892956925138382,
+                  -0.19312040678150863,
+                  -0.16758035301189533,
+                  -0.11284141268956366
                 ],
-                "prob_model1_better": 0.00125,
+                "prob_model1_better": 0.0,
                 "credible_interval_95": [
-                  -0.29820261689646044,
-                  -0.08927500960007076
+                  -0.2721651120059442,
+                  -0.11284141268956366
                 ],
                 "credible_interval_50": [
-                  -0.22739143093304848,
-                  -0.16059380791240685
+                  -0.21892956925138382,
+                  -0.16758035301189533
+                ]
+              },
+              "mtlformer__vs__shared_lstm": {
+                "mean_difference": -0.190114806001884,
+                "std_difference": 0.04034028434860339,
+                "quantiles": [
+                  -0.270276655149531,
+                  -0.21584907983160262,
+                  -0.19010743016739778,
+                  -0.16415937802861977,
+                  -0.1093892018025235
+                ],
+                "prob_model1_better": 0.000125,
+                "credible_interval_95": [
+                  -0.270276655149531,
+                  -0.1093892018025235
+                ],
+                "credible_interval_50": [
+                  -0.21584907983160262,
+                  -0.16415937802861977
+                ]
+              },
+              "mtlformer__vs__specialised_lstm": {
+                "mean_difference": -0.2053761615615364,
+                "std_difference": 0.0399646656064904,
+                "quantiles": [
+                  -0.2853396080922543,
+                  -0.2310395401601888,
+                  -0.20571930276095843,
+                  -0.17961050759968797,
+                  -0.1272642359490432
+                ],
+                "prob_model1_better": 0.0,
+                "credible_interval_95": [
+                  -0.2853396080922543,
+                  -0.1272642359490432
+                ],
+                "credible_interval_50": [
+                  -0.2310395401601888,
+                  -0.17961050759968797
+                ]
+              },
+              "activity_only_lstm__vs__shared_lstm": {
+                "mean_difference": 0.0030474627859245354,
+                "std_difference": 0.03937204002418619,
+                "quantiles": [
+                  -0.07397584719555554,
+                  -0.02228427376160505,
+                  0.0030179654936707268,
+                  0.028438031608719466,
+                  0.08052380685387339
+                ],
+                "prob_model1_better": 0.530375,
+                "credible_interval_95": [
+                  -0.07397584719555554,
+                  0.08052380685387339
+                ],
+                "credible_interval_50": [
+                  -0.02228427376160505,
+                  0.028438031608719466
+                ]
+              },
+              "activity_only_lstm__vs__specialised_lstm": {
+                "mean_difference": -0.012213892773727896,
+                "std_difference": 0.03993804298627036,
+                "quantiles": [
+                  -0.09055503333905131,
+                  -0.03781863843326208,
+                  -0.012253493763949408,
+                  0.013612996863610196,
+                  0.06781357926213749
+                ],
+                "prob_model1_better": 0.37325,
+                "credible_interval_95": [
+                  -0.09055503333905131,
+                  0.06781357926213749
+                ],
+                "credible_interval_50": [
+                  -0.03781863843326208,
+                  0.013612996863610196
+                ]
+              },
+              "shared_lstm__vs__specialised_lstm": {
+                "mean_difference": -0.015261355559652433,
+                "std_difference": 0.039460206863112,
+                "quantiles": [
+                  -0.09449499071739952,
+                  -0.040713397079467084,
+                  -0.015415668907624969,
+                  0.009915172086219476,
+                  0.06483912992749835
+                ],
+                "prob_model1_better": 0.3465,
+                "credible_interval_95": [
+                  -0.09449499071739952,
+                  0.06483912992749835
+                ],
+                "credible_interval_50": [
+                  -0.040713397079467084,
+                  0.009915172086219476
                 ]
               }
             },
-            "model": "<pymc.model.core.Model object at 0x118850e10>",
+            "model": "<pymc.model.core.Model object at 0x11bc70450>",
             "data": {
               "values": [
                 0.7673575194259789,
                 0.6396363605929418,
                 0.8271926163164366,
+                0.8324442752860908,
+                0.842619156039202,
                 0.8304098615962863,
                 0.683000882009854,
                 0.8391806147578592,
+                0.8520065379617063,
+                0.8515405893210065,
                 0.4934115535669946,
                 0.26023965605402105,
                 0.6287887078484564,
+                0.6096696717217777,
+                0.6426834167287987,
                 0.5252331438293993,
                 0.3642158670536534,
                 0.6055573123811593,
+                0.5898681959098878,
+                0.6220695821376316,
                 0.8128332595299274,
                 0.8007743576099948,
-                0.815955791967561
+                0.815955791967561,
+                0.8155160366534904,
+                0.8157118122389916
               ],
               "model_idx": [
                 0,
                 1,
                 2,
+                3,
+                4,
                 0,
                 1,
                 2,
+                3,
+                4,
                 0,
                 1,
                 2,
+                3,
+                4,
                 0,
                 1,
                 2,
+                3,
+                4,
                 0,
                 1,
-                2
+                2,
+                3,
+                4
               ],
               "dataset_idx": [
                 0,
                 0,
                 0,
+                0,
+                0,
+                1,
+                1,
                 1,
                 1,
                 1,
                 2,
                 2,
                 2,
+                2,
+                2,
                 3,
                 3,
                 3,
+                3,
+                3,
+                4,
+                4,
                 4,
                 4,
                 4
@@ -573,9 +834,9 @@
             }
           },
           "summary": {
-            "best_model": "activity_only_lstm",
-            "best_rank": 1.0,
-            "total_models": 3,
+            "best_model": "specialised_lstm",
+            "best_rank": 1.4,
+            "total_models": 5,
             "valid_datasets": 5,
             "total_datasets": 5
           },
@@ -595,11 +856,15 @@
             }
           }
         },
-        "extended": {
-          "note": "Extended-Track is descriptive only. No Plackett\u2013Luce, Bayes, or pairwise significance tests run."
+        "external_descriptive": {
+          "note": "External models (e.g., PGTNet) are reported descriptively and excluded from Plackett\u2013Luce, Bayesian, and pairwise significance tests."
         }
       },
       "significance": {},
+      "external_descriptive": {
+        "note": "External models (e.g., PGTNet) are reported descriptively and separately from unified in-repo models. They are excluded from inferential tests and rankings.",
+        "per_dataset": {}
+      },
       "efficiency": {
         "BPI_Challenge_2012": {
           "activity_only_lstm": {
@@ -763,7 +1028,7 @@
         }
       },
       "efficiency_summary": {
-        "minimal": {
+        "unified": {
           "process_transformer": {
             "median_train_time_seconds": 391.4440099239349,
             "median_infer_time_seconds": 17.200970888137817,
@@ -784,13 +1049,27 @@
             "median_params": 101014.0,
             "median_epochs": 16.0,
             "n_datasets": 5
+          },
+          "shared_lstm": {
+            "median_train_time_seconds": 1146.996286392212,
+            "median_infer_time_seconds": 20.518924760818482,
+            "median_params": 162476.0,
+            "median_epochs": 21.0,
+            "n_datasets": 5
+          },
+          "specialised_lstm": {
+            "median_train_time_seconds": 1620.3338146209717,
+            "median_infer_time_seconds": 44.0711567401886,
+            "median_params": 203276.0,
+            "median_epochs": 17.0,
+            "n_datasets": 5
           }
         }
       },
       "stratified": {}
     },
     "next_time": {
-      "minimal": {
+      "unified": {
         "per_dataset": {
           "BPI_Challenge_2012": {
             "process_transformer": {
@@ -874,12 +1153,8 @@
           }
         }
       },
-      "extended": {
-        "per_dataset": {},
-        "limitation": "No extended model available for next_time (NET); reported explicitly as a limitation."
-      },
       "rankings": {
-        "minimal": {
+        "unified": {
           "task": "next_time",
           "task_direction": "lower",
           "average_ranks": {
@@ -979,36 +1254,36 @@
             "trace": "Inference data with groups:\n\t> posterior\n\t> sample_stats\n\t> observed_data",
             "model_effects_summary": {
               "mean": [
-                0.931,
-                0.892
+                0.936,
+                0.881
               ],
               "sd": [
-                1.016,
-                1.011
+                1.009,
+                1.005
               ],
               "hdi_3%": [
-                -1.057,
-                -1.082
+                -0.893,
+                -1.06
               ],
               "hdi_97%": [
-                2.804,
-                2.696
+                2.857,
+                2.685
               ],
               "mcse_mean": [
-                0.01,
-                0.01
+                0.009,
+                0.009
               ],
               "mcse_sd": [
-                0.011,
-                0.01
+                0.012,
+                0.011
               ],
               "ess_bulk": [
-                10555.0,
-                10577.0
+                11667.0,
+                11352.0
               ],
               "ess_tail": [
-                6411.0,
-                6322.0
+                6030.0,
+                6812.0
               ],
               "r_hat": [
                 1.0,
@@ -1017,32 +1292,32 @@
             },
             "dataset_effects_summary": {
               "mean": [
-                0.009,
+                0.0,
                 0.037,
-                0.015,
-                0.057,
-                0.347
+                0.012,
+                0.053,
+                0.361
               ],
               "sd": [
-                0.503,
-                0.5,
-                0.493,
-                0.5,
-                0.508
+                0.497,
+                0.499,
+                0.501,
+                0.496,
+                0.5
               ],
               "hdi_3%": [
-                -0.939,
-                -0.863,
-                -0.877,
-                -0.888,
-                -0.636
+                -0.922,
+                -0.878,
+                -0.969,
+                -0.878,
+                -0.555
               ],
               "hdi_97%": [
-                0.956,
-                1.028,
-                0.995,
-                0.988,
-                1.253
+                0.943,
+                0.979,
+                0.922,
+                0.954,
+                1.298
               ],
               "mcse_mean": [
                 0.005,
@@ -1052,25 +1327,25 @@
                 0.005
               ],
               "mcse_sd": [
-                0.006,
+                0.005,
+                0.005,
                 0.005,
                 0.006,
-                0.005,
                 0.005
               ],
               "ess_bulk": [
-                9792.0,
-                10438.0,
-                11472.0,
-                12560.0,
-                9294.0
+                10790.0,
+                12065.0,
+                10473.0,
+                12309.0,
+                11843.0
               ],
               "ess_tail": [
-                5759.0,
-                6634.0,
-                6470.0,
-                6251.0,
-                6491.0
+                6435.0,
+                6282.0,
+                6429.0,
+                6307.0,
+                6612.0
               ],
               "r_hat": [
                 1.0,
@@ -1082,27 +1357,27 @@
             },
             "pairwise_differences": {
               "process_transformer__vs__mtlformer": {
-                "mean_difference": 0.03951454200262168,
-                "std_difference": 1.440663794458919,
+                "mean_difference": 0.05462075843649647,
+                "std_difference": 1.417680194227066,
                 "quantiles": [
-                  -2.7350057867352024,
-                  -0.9333468376588486,
-                  0.038093184846027195,
-                  1.0117710440173109,
-                  2.8962645639461306
+                  -2.7472330625099883,
+                  -0.8835955809002439,
+                  0.043526441837420826,
+                  0.9986006327970292,
+                  2.8367966162001412
                 ],
-                "prob_model1_better": 0.50875,
+                "prob_model1_better": 0.512125,
                 "credible_interval_95": [
-                  -2.7350057867352024,
-                  2.8962645639461306
+                  -2.7472330625099883,
+                  2.8367966162001412
                 ],
                 "credible_interval_50": [
-                  -0.9333468376588486,
-                  1.0117710440173109
+                  -0.8835955809002439,
+                  0.9986006327970292
                 ]
               }
             },
-            "model": "<pymc.model.core.Model object at 0x1193d3190>",
+            "model": "<pymc.model.core.Model object at 0x11d3faa50>",
             "data": {
               "values": [
                 15.84884853363037,
@@ -1165,11 +1440,15 @@
             }
           }
         },
-        "extended": {
-          "note": "No Extended-Track models for this task."
+        "external_descriptive": {
+          "note": "External models (e.g., PGTNet) are reported descriptively and excluded from Plackett\u2013Luce, Bayesian, and pairwise significance tests."
         }
       },
       "significance": {},
+      "external_descriptive": {
+        "note": "External models (e.g., PGTNet) are reported descriptively and separately from unified in-repo models. They are excluded from inferential tests and rankings.",
+        "per_dataset": {}
+      },
       "efficiency": {
         "BPI_Challenge_2012": {
           "mtlformer": {
@@ -1243,7 +1522,7 @@
         }
       },
       "efficiency_summary": {
-        "minimal": {
+        "unified": {
           "process_transformer": {
             "median_train_time_seconds": 315.1565073013306,
             "median_infer_time_seconds": 13.043817377090454,
@@ -1263,7 +1542,7 @@
       "stratified": {}
     },
     "remaining_time": {
-      "minimal": {
+      "unified": {
         "per_dataset": {
           "BPI_Challenge_2012": {
             "process_transformer": {
@@ -1347,63 +1626,8 @@
           }
         }
       },
-      "extended": {
-        "scale_note": "Extended-Track metric scale differs from Minimal-Track for some models (e.g., normalized vs absolute MAE). Uplifts are omitted where non-comparable.",
-        "per_dataset": {
-          "BPI_Challenge_2012": {
-            "pgtnet (external, splits=cv-kfold-5)": {
-              "mean": 0.05140799999999999,
-              "lower": 0.051097410216135286,
-              "upper": 0.05171858978386469,
-              "n": 5,
-              "uplift_vs_minimal_best": null,
-              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
-            }
-          },
-          "Helpdesk": {
-            "pgtnet (external, splits=cv-kfold-5)": {
-              "mean": 0.09173200000000001,
-              "lower": 0.08737502066909103,
-              "upper": 0.09608897933090899,
-              "n": 5,
-              "uplift_vs_minimal_best": null,
-              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
-            }
-          },
-          "Sepsis": {
-            "pgtnet (external, splits=cv-kfold-5)": {
-              "mean": 0.073544,
-              "lower": 0.06996902530463024,
-              "upper": 0.07711897469536975,
-              "n": 5,
-              "uplift_vs_minimal_best": null,
-              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
-            }
-          },
-          "Tourism": {
-            "pgtnet (external, splits=cv-kfold-5)": {
-              "mean": 0.07175400000000001,
-              "lower": 0.07027885822843478,
-              "upper": 0.07322914177156524,
-              "n": 5,
-              "uplift_vs_minimal_best": null,
-              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
-            }
-          },
-          "Traffic_Fines": {
-            "pgtnet (external, splits=cv-kfold-5)": {
-              "mean": 0.045982,
-              "lower": 0.04395768018392729,
-              "upper": 0.048006319816072715,
-              "n": 5,
-              "uplift_vs_minimal_best": null,
-              "uplift_note": "Metric scale likely not comparable to Minimal-Track; uplift omitted."
-            }
-          }
-        }
-      },
       "rankings": {
-        "minimal": {
+        "unified": {
           "task": "remaining_time",
           "task_direction": "lower",
           "average_ranks": {
@@ -1503,36 +1727,36 @@
             "trace": "Inference data with groups:\n\t> posterior\n\t> sample_stats\n\t> observed_data",
             "model_effects_summary": {
               "mean": [
-                0.923,
-                1.087
+                0.922,
+                1.073
               ],
               "sd": [
-                1.008,
-                0.997
+                0.99,
+                0.984
               ],
               "hdi_3%": [
-                -0.969,
-                -0.746
+                -0.911,
+                -0.814
               ],
               "hdi_97%": [
-                2.823,
-                2.982
+                2.824,
+                2.851
               ],
               "mcse_mean": [
-                0.01,
+                0.011,
                 0.01
               ],
               "mcse_sd": [
                 0.011,
-                0.011
+                0.01
               ],
               "ess_bulk": [
-                11081.0,
-                10334.0
+                8734.0,
+                9940.0
               ],
               "ess_tail": [
-                6384.0,
-                6331.0
+                6521.0,
+                6682.0
               ],
               "r_hat": [
                 1.0,
@@ -1541,32 +1765,32 @@
             },
             "dataset_effects_summary": {
               "mean": [
-                0.008,
-                0.008,
-                0.066,
-                0.079,
-                0.341
+                0.0,
+                0.02,
+                0.069,
+                0.081,
+                0.344
               ],
               "sd": [
                 0.498,
-                0.514,
-                0.492,
                 0.501,
-                0.506
+                0.496,
+                0.5,
+                0.504
               ],
               "hdi_3%": [
-                -0.945,
-                -0.961,
-                -0.884,
-                -0.837,
-                -0.637
+                -0.919,
+                -0.896,
+                -0.82,
+                -0.897,
+                -0.582
               ],
               "hdi_97%": [
-                0.921,
-                0.95,
-                0.983,
-                1.041,
-                1.276
+                0.935,
+                0.98,
+                1.034,
+                0.99,
+                1.29
               ],
               "mcse_mean": [
                 0.005,
@@ -1576,25 +1800,25 @@
                 0.005
               ],
               "mcse_sd": [
+                0.005,
+                0.005,
                 0.006,
-                0.005,
-                0.005,
-                0.005,
+                0.006,
                 0.005
               ],
               "ess_bulk": [
-                9051.0,
-                10286.0,
-                8205.0,
-                10430.0,
-                10188.0
+                9524.0,
+                9922.0,
+                11015.0,
+                11546.0,
+                9507.0
               ],
               "ess_tail": [
-                5799.0,
-                6526.0,
-                6544.0,
-                6530.0,
-                6844.0
+                6269.0,
+                6646.0,
+                6304.0,
+                5840.0,
+                6474.0
               ],
               "r_hat": [
                 1.0,
@@ -1606,27 +1830,27 @@
             },
             "pairwise_differences": {
               "process_transformer__vs__mtlformer": {
-                "mean_difference": -0.16353037639418105,
-                "std_difference": 1.4001177191054726,
+                "mean_difference": -0.15069155969402354,
+                "std_difference": 1.38996718165213,
                 "quantiles": [
-                  -2.952289705725214,
-                  -1.0779030852231088,
-                  -0.15947197384584977,
-                  0.7598698956364691,
-                  2.594031538899238
+                  -2.892598851004145,
+                  -1.0885861206956209,
+                  -0.14603340373469526,
+                  0.7721368424799464,
+                  2.5771437562141806
                 ],
-                "prob_model1_better": 0.454375,
+                "prob_model1_better": 0.454875,
                 "credible_interval_95": [
-                  -2.952289705725214,
-                  2.594031538899238
+                  -2.892598851004145,
+                  2.5771437562141806
                 ],
                 "credible_interval_50": [
-                  -1.0779030852231088,
-                  0.7598698956364691
+                  -1.0885861206956209,
+                  0.7721368424799464
                 ]
               }
             },
-            "model": "<pymc.model.core.Model object at 0x119308250>",
+            "model": "<pymc.model.core.Model object at 0x13843ef10>",
             "data": {
               "values": [
                 7.573567962646484,
@@ -1689,11 +1913,97 @@
             }
           }
         },
-        "extended": {
-          "note": "Extended-Track is descriptive only. No Plackett\u2013Luce, Bayes, or pairwise significance tests run."
+        "external_descriptive": {
+          "note": "External models (e.g., PGTNet) are reported descriptively and excluded from Plackett\u2013Luce, Bayesian, and pairwise significance tests."
         }
       },
       "significance": {},
+      "external_descriptive": {
+        "note": "External models (e.g., PGTNet) are reported descriptively and separately from unified in-repo models. They are excluded from inferential tests and rankings.",
+        "per_dataset": {
+          "BPI_Challenge_2012": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.05140799999999999,
+              "lower": 0.051097410216135286,
+              "upper": 0.05171858978386469,
+              "n": 5
+            }
+          },
+          "Helpdesk": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.09173200000000001,
+              "lower": 0.08737502066909103,
+              "upper": 0.09608897933090899,
+              "n": 5
+            }
+          },
+          "Sepsis": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.073544,
+              "lower": 0.06996902530463024,
+              "upper": 0.07711897469536975,
+              "n": 5
+            }
+          },
+          "Tourism": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.07175400000000001,
+              "lower": 0.07027885822843478,
+              "upper": 0.07322914177156524,
+              "n": 5
+            }
+          },
+          "Traffic_Fines": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "mean": 0.045982,
+              "lower": 0.04395768018392729,
+              "upper": 0.048006319816072715,
+              "n": 5
+            }
+          }
+        },
+        "efficiency": {
+          "Helpdesk": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "train_time_seconds": 101.8369772169739,
+              "params": 344575.0
+            }
+          },
+          "Tourism": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "train_time_seconds": 5406.023940057999,
+              "params": 62949869.0
+            }
+          },
+          "BPI_Challenge_2012": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "train_time_seconds": 1504.0570296186954,
+              "params": 224755.0
+            }
+          },
+          "Sepsis": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "train_time_seconds": 337.7667455781251,
+              "params": 538244.0
+            }
+          },
+          "Traffic_Fines": {
+            "pgtnet (external, splits=cv-kfold-5)": {
+              "train_time_seconds": 450.9725935507566,
+              "params": 269215.0
+            }
+          }
+        },
+        "efficiency_summary": {
+          "pgtnet (external, splits=cv-kfold-5)": {
+            "median_train_time_seconds": 450.9725935507566,
+            "median_infer_time_seconds": null,
+            "median_params": 344575.0,
+            "median_epochs": null,
+            "n_datasets": 5
+          }
+        }
+      },
       "efficiency": {
         "BPI_Challenge_2012": {
           "mtlformer": {
@@ -1767,7 +2077,7 @@
         }
       },
       "efficiency_summary": {
-        "minimal": {
+        "unified": {
           "process_transformer": {
             "median_train_time_seconds": 349.8925323009491,
             "median_infer_time_seconds": 16.10991406440735,
@@ -1788,9 +2098,9 @@
     }
   },
   "notes": {
-    "inference": "Inferential statistics (Plackett\u2013Luce, Bayesian tests, non-parametric tests) are reported for the Minimal-Track. Extended-Track results are descriptive; where metric scales are non-comparable (e.g., normalized vs absolute MAE), uplifts are omitted and a note is added.",
+    "inference": "Inferential statistics (Plackett\u2013Luce, Bayesian tests, non-parametric tests) are reported over the unified internal model pool. External models (e.g., PGTNet) are descriptive only and excluded from inferential tests. Where metric scales are non-comparable (e.g., normalized vs absolute MAE), we omit uplift-style comparisons.",
     "ci_method": "Per-dataset 95% t-based confidence intervals computed over cross-validation folds (n\u22485). Accuracy: higher is better. Time tasks: MAE (lower is better).",
-    "dataset_exclusion_criteria": "A dataset contributes to average ranks only if all compared Minimal-Track models have valid scores. Datasets with missing model scores or missing fold metrics are excluded and listed under dataset_selection."
+    "dataset_exclusion_criteria": "A dataset contributes to average ranks only if all compared internal models have valid scores. Datasets with missing model scores or missing fold metrics are excluded and listed under dataset_selection."
   },
   "mtlformer_efficiency": {
     "BPI_Challenge_2012": {

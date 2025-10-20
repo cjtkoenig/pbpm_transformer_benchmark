@@ -929,22 +929,6 @@ def _collect_fold_scores(outputs_dir: Path) -> Dict[str, Dict[str, Dict[str, Lis
     return data
 
 
-def _model_track(model_name: str) -> Optional[str]:
-    """Infer track name from model. Returns 'minimal', 'extended', or None.
-    External PGTNet labels (e.g., 'PGTNet (external, splits=...)') are treated as 'extended'.
-    """
-    name = (model_name or "").strip()
-    lname = name.lower()
-    minimal = {"process_transformer", "mtlformer", "activity_only_lstm"}
-    extended = {"shared_lstm", "specialised_lstm"}
-    if name in minimal:
-        return "minimal"
-    if name in extended:
-        return "extended"
-    # Heuristic: any model label mentioning 'pgtnet' belongs to extended track
-    if "pgtnet" in lname or lname.startswith("pgt"):
-        return "extended"
-    return None
 
 
 def _compute_ci(values: List[float], confidence: float = 0.95) -> Dict[str, float]:
@@ -963,8 +947,8 @@ def _compute_ci(values: List[float], confidence: float = 0.95) -> Dict[str, floa
 
 
 def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, Any]:
-    """Generate thesis-aligned reports.
-    Returns a dict with keys: minimal, extended, efficiency, stratified, metadata.
+    """Generate thesis-aligned report with a single unified track per task.
+    All in-repo models are analyzed together without minimal/extended distinction.
     """
     outputs_dir = Path(outputs_dir)
     fold_scores = _collect_fold_scores(outputs_dir)
@@ -978,99 +962,146 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                 fold_scores.setdefault(d, {}).setdefault(tsk, {})[model] = folds
     tasks = ["next_activity", "next_time", "remaining_time"] if task == "all" else [task]
 
-    def filter_models_for_task(t: str, track: str) -> List[str]:
-        all_models = set()
-        for d in summary:
-            if t in summary[d]:
-                all_models |= set(summary[d][t].keys())
-        # Track filter only; include mtlformer per-task results produced by multitask training
-        return [m for m in sorted(all_models) if _model_track(m) == track]
+    # Helper: return the set of available models for a task limited to in-repo models
+    def get_models_for_task(t: str) -> List[str]:
+        repo_models_by_task = {
+            "next_activity": [
+                "process_transformer",
+                "mtlformer",
+                "activity_only_lstm",
+                "shared_lstm",
+                "specialised_lstm",
+            ],
+            "next_time": [
+                "process_transformer",
+                "mtlformer",
+            ],
+            "remaining_time": [
+                "process_transformer",
+                "mtlformer",
+            ],
+        }
+        # Always use the full set of in-repo models for the task.
+        # Availability is handled downstream (missing values are skipped where applicable),
+        # which ensures hierarchical Bayes pairwise comparisons consider all models.
+        return list(repo_models_by_task.get(t, []))
 
     report: Dict[str, Any] = {"metadata": {"tasks": tasks}, "per_task": {}, "notes": {}}
 
     for t in tasks:
-        per_task = {"minimal": {}, "extended": {}, "rankings": {}, "significance": {}}
-        # Minimal track models per constraints
-        if t == "next_activity":
-            min_models = [m for m in ["process_transformer", "mtlformer", "activity_only_lstm"] if m in filter_models_for_task(t, "minimal")]
-            ext_models = [m for m in ["shared_lstm", "specialised_lstm"] if m in filter_models_for_task(t, "extended")]
-            metric_name = "accuracy"; higher_better = True
-        elif t == "next_time":
-            min_models = [m for m in ["process_transformer", "mtlformer"] if m in filter_models_for_task(t, "minimal")]
-            ext_models = []
-            metric_name = "mae"; higher_better = False
-        else:  # remaining_time
-            min_models = [m for m in ["process_transformer", "mtlformer"] if m in filter_models_for_task(t, "minimal")]
-            # Include any extended-track models available for remaining_time (e.g., external PGTNet labels)
-            ext_models = filter_models_for_task(t, "extended")
-            metric_name = "mae"; higher_better = False
+        per_task: Dict[str, Any] = {"unified": {}, "rankings": {}, "significance": {}}
+        unified_models = get_models_for_task(t)
+        metric_name = "accuracy" if t == "next_activity" else "mae"
+        higher_better = (t == "next_activity")
 
         # Build per-dataset tables with CI
         datasets = sorted(d for d in summary if t in summary[d])
-        minimal_table = {}
-        extended_table = {}
+        unified_table: Dict[str, Any] = {}
         for d in datasets:
             if t not in fold_scores.get(d, {}):
                 continue
-            # Minimal
-            row_min = {}
-            for m in min_models:
+            row = {}
+            for m in unified_models:
                 vals = fold_scores[d][t].get(m, [])
                 ci = _compute_ci(vals)
-                row_min[m] = ci
-            if row_min:
-                # Ranking within dataset for minimal
+                row[m] = ci
+            if row:
+                # Ranking within dataset for unified models
                 if higher_better:
-                    ranking = sorted(((m, row_min[m]["mean"]) for m in row_min), key=lambda x: x[1], reverse=True)
+                    ranking = sorted(((m, row[m]["mean"]) for m in row), key=lambda x: x[1], reverse=True)
                 else:
-                    ranking = sorted(((m, row_min[m]["mean"]) for m in row_min), key=lambda x: x[1])
+                    ranking = sorted(((m, row[m]["mean"]) for m in row), key=lambda x: x[1])
                 rank_map = {m: i + 1 for i, (m, _) in enumerate(ranking)}
-                for m in row_min:
-                    row_min[m]["rank"] = rank_map[m]
-                minimal_table[d] = row_min
-            # Extended and uplift
-            row_ext = {}
-            _ext_scale_noncomp = False
-            for m in ext_models:
-                vals = fold_scores[d][t].get(m, [])
-                ci = _compute_ci(vals)
-                # compute minimal best mean for uplift when scales appear comparable
-                if minimal_table.get(d):
-                    if higher_better:
-                        min_best_mean = max(minimal_table[d][mm]["mean"] for mm in minimal_table[d])
-                    else:
-                        min_best_mean = min(minimal_table[d][mm]["mean"] for mm in minimal_table[d])
-                    # scale comparability check: if magnitude differs by >5x, omit uplift
-                    try:
-                        a = float(ci.get("mean", float("nan")))
-                        b = float(min_best_mean)
-                        if np.isfinite(a) and np.isfinite(b) and a > 0 and b > 0:
-                            ratio = max(a, b) / min(a, b)
-                            scale_ok = ratio <= 5.0
-                        else:
-                            scale_ok = True
-                    except Exception:
-                        scale_ok = True
-                    if scale_ok and min_best_mean:
-                        if higher_better:
-                            uplift = (ci["mean"] - min_best_mean) / (min_best_mean if min_best_mean else 1.0)
-                        else:
-                            uplift = (min_best_mean - ci["mean"]) / (min_best_mean if min_best_mean else 1.0)
-                        ci["uplift_vs_minimal_best"] = uplift
-                    else:
-                        ci["uplift_vs_minimal_best"] = None
-                        ci["uplift_note"] = "Metric scale likely not comparable to Minimal-Track; uplift omitted."
-                        _ext_scale_noncomp = True
-                row_ext[m] = ci
-            if row_ext:
-                extended_table[d] = row_ext
-                if _ext_scale_noncomp:
-                    per_task.setdefault("extended", {}).setdefault("scale_note", "Extended-Track metric scale differs from Minimal-Track for some models (e.g., normalized vs absolute MAE). Uplifts are omitted where non-comparable.")
-        per_task["minimal"]["per_dataset"] = minimal_table
-        per_task["extended"]["per_dataset"] = extended_table
+                for m in row:
+                    row[m]["rank"] = rank_map[m]
+                unified_table[d] = row
+        per_task["unified"]["per_dataset"] = unified_table
 
-        # Rankings & significance within-track
-        # Use BenchmarkStatisticalAnalysis for means across datasets
+        # External descriptive reporting (e.g., PGTNet) — separate from unified analysis
+        external_table: Dict[str, Any] = {}
+        # Gather datasets that have external results for this task
+        ext_datasets = set()
+        for d_ext, tmap in ext_folds.items():
+            if t in tmap:
+                ext_datasets.add(d_ext)
+        for d_ext, tmap in ext_summary.items():
+            if t in tmap:
+                ext_datasets.add(d_ext)
+        for d_ext in sorted(ext_datasets):
+            row_ext = {}
+            # From ingested folds (preferred for CI)
+            for m_ext, folds in (ext_folds.get(d_ext, {}).get(t, {}) or {}).items():
+                try:
+                    ci = _compute_ci(list(folds) if isinstance(folds, list) else [])
+                except Exception:
+                    ci = {"mean": float("nan"), "lower": float("nan"), "upper": float("nan"), "n": 0}
+                row_ext[m_ext] = ci
+            # If only summary is available, create a degenerate CI (n=0)
+            for m_ext, score in (ext_summary.get(d_ext, {}).get(t, {}) or {}).items():
+                if m_ext not in row_ext and isinstance(score, (int, float)):
+                    s = float(score)
+                    row_ext[m_ext] = {"mean": s, "lower": s, "upper": s, "n": 0}
+            if row_ext:
+                external_table[d_ext] = row_ext
+        per_task["external_descriptive"] = {
+            "note": "External models (e.g., PGTNet) are reported descriptively and separately from unified in-repo models. They are excluded from inferential tests and rankings.",
+            "per_dataset": external_table
+        }
+
+        # Per-dataset efficiency for external models (if available from ingestion)
+        ext_efficiency = {}
+        for d_ext, tmap in ext_eff.items():
+            if t in tmap and isinstance(tmap.get(t), dict) and tmap.get(t):
+                ext_efficiency[d_ext] = tmap[t]
+        if ext_efficiency:
+            per_task["external_descriptive"]["efficiency"] = ext_efficiency
+
+        # Efficiency summary for external models (median across datasets)
+        ext_eff_summary: Dict[str, Dict[str, Any]] = {}
+        # Collect model-wise values
+        ext_models_all = set()
+        for d_ext, mmap in ext_efficiency.items():
+            ext_models_all |= set(mmap.keys())
+        for m_ext in sorted(ext_models_all):
+            vals_tt: List[float] = []
+            vals_it: List[float] = []
+            vals_p: List[float] = []
+            vals_ep: List[float] = []
+            for d_ext, mmap in ext_efficiency.items():
+                e = mmap.get(m_ext) or {}
+                try:
+                    if isinstance(e.get("train_time_seconds"), (int, float)):
+                        vals_tt.append(float(e["train_time_seconds"]))
+                except Exception:
+                    pass
+                try:
+                    if isinstance(e.get("infer_time_seconds"), (int, float)):
+                        vals_it.append(float(e["infer_time_seconds"]))
+                except Exception:
+                    pass
+                try:
+                    if isinstance(e.get("params"), (int, float)):
+                        vals_p.append(float(e["params"]))
+                except Exception:
+                    pass
+                try:
+                    if isinstance(e.get("epochs"), (int, float)):
+                        vals_ep.append(float(e["epochs"]))
+                except Exception:
+                    pass
+            if any([vals_tt, vals_it, vals_p, vals_ep]):
+                from statistics import median
+                ext_eff_summary[m_ext] = {
+                    "median_train_time_seconds": float(median(vals_tt)) if vals_tt else None,
+                    "median_infer_time_seconds": float(median(vals_it)) if vals_it else None,
+                    "median_params": float(median(vals_p)) if vals_p else None,
+                    "median_epochs": float(median(vals_ep)) if vals_ep else None,
+                    "n_datasets": max(len(vals_tt), len(vals_it), len(vals_p), len(vals_ep))
+                }
+        if ext_eff_summary:
+            per_task["external_descriptive"]["efficiency_summary"] = ext_eff_summary
+
+        # Rankings & significance across all unified models
         def build_stats(models: List[str]):
             if not models:
                 return {}
@@ -1084,12 +1115,9 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                 top_models = [m for m, r in avg.items() if r == min_rank]
                 if len(top_models) >= 2:
                     BA_top = BenchmarkStatisticalAnalysis(task_results, top_models, [d for d in datasets if t in summary[d]])
-                    # jsonify pairwise_top_only keys for JSON safety
                     top_pairwise = BA_top.pairwise_wilcoxon_tests(t)
                     top_pairwise_json = {f"{a}__vs__{b}": v for (a, b), v in top_pairwise.items()} if isinstance(top_pairwise, dict) else top_pairwise
-                    comp_top = {
-                        "pairwise_top_only": top_pairwise_json
-                    }
+                    comp_top = {"pairwise_top_only": top_pairwise_json}
                 else:
                     comp_top = {"pairwise_top_only": {}}
             else:
@@ -1105,8 +1133,7 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
             excl_info = []
             for d in excluded:
                 missing = [m for m in models if m not in summary.get(d, {}).get(t, {})]
-                reason = "missing scores for models: " + ", ".join(missing) if missing else "dataset lacks complete results across minimal models"
-                # Cross-check folds presence
+                reason = "missing scores for models: " + ", ".join(missing) if missing else "dataset lacks complete results across models"
                 has_folds = bool(fold_scores.get(d, {}).get(t, {}))
                 if not has_folds:
                     reason += "; no fold metrics found"
@@ -1118,21 +1145,20 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
             }
             return comp
 
-        per_task["rankings"]["minimal"] = build_stats(min_models)
-        # Extended-Track: descriptive only (no inferential tests)
-        if ext_models:
-            per_task["rankings"]["extended"] = {"note": "Extended-Track is descriptive only. No Plackett–Luce, Bayes, or pairwise significance tests run."}
-        else:
-            per_task["rankings"]["extended"] = {"note": "No Extended-Track models for this task."}
+        per_task["rankings"]["unified"] = build_stats(unified_models)
+        # External models (PGTNet, etc.) are descriptive only — no inferential stats
+        per_task["rankings"]["external_descriptive"] = {
+            "note": "External models (e.g., PGTNet) are reported descriptively and excluded from Plackett–Luce, Bayesian, and pairwise significance tests."
+        }
 
-        # Efficiency: derive from cv_results.json (means across folds).
+        # Efficiency: derive from cv_results.json (means across folds) for unified models only
         efficiency = {}
         for d in datasets:
             eff_d = {}
             base = outputs_dir / d / t
             if not base.exists():
                 continue
-            for m in sorted(min_models + ext_models):
+            for m in sorted(unified_models):
                 mdir = base / m
                 if not mdir.exists():
                     continue
@@ -1181,16 +1207,15 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                         if ep is not None: eff["epochs"] = int(round(ep))
                     except Exception:
                         pass
-                # If any efficiency fields found, record
                 if eff:
                     eff_d[m] = eff
             if eff_d:
                 efficiency[d] = eff_d
         per_task["efficiency"] = efficiency
 
-        # Efficiency summary (median across datasets) for Minimal-Track models
-        eff_summary_min: Dict[str, Dict[str, Any]] = {}
-        for m in min_models:
+        # Efficiency summary (median across datasets) for unified models
+        eff_summary: Dict[str, Dict[str, Any]] = {}
+        for m in unified_models:
             vals_tt: List[float] = []
             vals_it: List[float] = []
             vals_p: List[float] = []
@@ -1221,17 +1246,14 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
                     pass
             if any([vals_tt, vals_it, vals_p, vals_ep]):
                 from statistics import median
-                eff_summary_min[m] = {
+                eff_summary[m] = {
                     "median_train_time_seconds": float(median(vals_tt)) if vals_tt else None,
                     "median_infer_time_seconds": float(median(vals_it)) if vals_it else None,
                     "median_params": float(median(vals_p)) if vals_p else None,
                     "median_epochs": float(median(vals_ep)) if vals_ep else None,
                     "n_datasets": max(len(vals_tt), len(vals_it), len(vals_p), len(vals_ep))
                 }
-        if eff_summary_min:
-            per_task["efficiency_summary"] = {"minimal": eff_summary_min}
-        else:
-            per_task["efficiency_summary"] = {"minimal": {}}
+        per_task["efficiency_summary"] = {"unified": eff_summary}
 
         # Stratified: attempt to read optional stratified_metrics.json per model
         stratified = {}
@@ -1240,7 +1262,7 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
             base = outputs_dir / d / t
             if not base.exists():
                 continue
-            for m in sorted(min_models + ext_models):
+            for m in sorted(unified_models):
                 mdir = base / m
                 if not mdir.exists():
                     continue
@@ -1254,10 +1276,6 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
             if s_d:
                 stratified[d] = s_d
         per_task["stratified"] = stratified
-
-        # Explicit limitation note for NET (next_time): no extended models
-        if t == "next_time":
-            per_task.setdefault("extended", {})["limitation"] = "No extended model available for next_time (NET); reported explicitly as a limitation."
 
         report["per_task"][t] = per_task
 
@@ -1291,7 +1309,7 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
             base = outputs_dir / d / tsk
             if not base.exists():
                 continue
-            # prefer process_transformer; fallback to any minimal with cv_results.json
+            # prefer process_transformer; fallback to any available model with cv_results.json
             candidates = ["process_transformer", "activity_only_lstm"]
             found_dir: Optional[Path] = None
             for cand in candidates:
@@ -1331,9 +1349,9 @@ def generate_thesis_report(outputs_dir: Path, task: str = "all") -> Dict[str, An
     report["mtlformer_efficiency"] = mtl_eff
 
     # General notes
-    report["notes"]["inference"] = "Inferential statistics (Plackett–Luce, Bayesian tests, non-parametric tests) are reported for the Minimal-Track. Extended-Track results are descriptive; where metric scales are non-comparable (e.g., normalized vs absolute MAE), uplifts are omitted and a note is added."
+    report["notes"]["inference"] = "Inferential statistics (Plackett–Luce, Bayesian tests, non-parametric tests) are reported over the unified internal model pool. External models (e.g., PGTNet) are descriptive only and excluded from inferential tests. Where metric scales are non-comparable (e.g., normalized vs absolute MAE), we omit uplift-style comparisons."
     report["notes"]["ci_method"] = "Per-dataset 95% t-based confidence intervals computed over cross-validation folds (n≈5). Accuracy: higher is better. Time tasks: MAE (lower is better)."
-    report["notes"]["dataset_exclusion_criteria"] = "A dataset contributes to average ranks only if all compared Minimal-Track models have valid scores. Datasets with missing model scores or missing fold metrics are excluded and listed under dataset_selection."
+    report["notes"]["dataset_exclusion_criteria"] = "A dataset contributes to average ranks only if all compared internal models have valid scores. Datasets with missing model scores or missing fold metrics are excluded and listed under dataset_selection."
 
     return report
 

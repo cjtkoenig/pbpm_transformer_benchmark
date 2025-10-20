@@ -75,15 +75,11 @@ def get_next_activity_model(
     dropout_input: float = 0.15,
     dropout_context: float = 0.15,
     l2reg: float = 1e-4,
-    attribute_mode: str = "minimal",
 ) -> Model:
     """Create the activities-only Wickramanayake LSTM model for next-activity.
 
     Returns a tf.keras.Model with input [ac_tokens] and softmax outputs over output_dim.
     """
-    if attribute_mode != "minimal":
-        # Guard for activities-only version
-        raise NotImplementedError("activity_only_lstm supports only attribute_mode='minimal' (activities only)")
 
     # Input: integer activity tokens [B, T]
     ac_input = layers.Input(shape=(max_case_length,), dtype="int32", name="ac_input")
