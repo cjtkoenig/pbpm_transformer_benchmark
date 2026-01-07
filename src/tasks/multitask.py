@@ -62,7 +62,7 @@ class MultiTaskLearningTask:
             filtered[t] = (ftr, fvl)
         return filtered
 
-    def _prepare_arrays(self, loader: CanonicalLogsDataLoader, ta_df: pd.DataFrame, tt_df: pd.DataFrame, tr_df: pd.DataFrame, max_case_length: int):
+    def _prepare_arrays(self, loader: CanonicalLogsDataLoader, ta_df: pd.DataFrame, tt_df: pd.DataFrame, tr_df: pd.DataFrame, max_case_length: int, scalers: Dict[str, Any] = None):
         # Align rows from the three task-specific DataFrames by case_id and prefix
         base = ta_df[["case_id", "prefix", "next_act"]].copy()
         tt_cols = ["case_id", "prefix", "recent_time", "latest_time", "time_passed", "next_time"]
@@ -84,18 +84,31 @@ class MultiTaskLearningTask:
         y_word_dict = loader.y_word_dict
         token_ya = np.array([y_word_dict[_y] for _y in ya], dtype=np.int32)
 
-        # Time features and targets (raw, as in single-task runners)
+        # Time features and targets with optional scaling
         time_feats = merged[["recent_time", "latest_time", "time_passed"]].values.astype(np.float32)
-        yn = merged["next_time"].values.astype(np.float32)
-        yr = merged["remaining_time_days"].values.astype(np.float32)
-        yn = yn.reshape(-1, 1)
-        yr = yr.reshape(-1, 1)
+        yn = merged["next_time"].values.astype(np.float32).reshape(-1, 1)
+        yr = merged["remaining_time_days"].values.astype(np.float32).reshape(-1, 1)
+
+        if scalers is not None:
+            time_feats = scalers['time'].transform(time_feats).astype(np.float32)
+            yn = scalers['yn'].transform(yn).astype(np.float32)
+            yr = scalers['yr'].transform(yr).astype(np.float32)
+            new_scalers = scalers
+        else:
+            from sklearn.preprocessing import StandardScaler
+            s_t = StandardScaler()
+            time_feats = s_t.fit_transform(time_feats).astype(np.float32)
+            s_yn = StandardScaler()
+            yn = s_yn.fit_transform(yn).astype(np.float32)
+            s_yr = StandardScaler()
+            yr = s_yr.fit_transform(yr).astype(np.float32)
+            new_scalers = {'time': s_t, 'yn': s_yn, 'yr': s_yr}
 
         # MTLFormer expects two token inputs and one time input
         inputs1 = np.asarray(token_x, dtype=np.int32)
         inputs2 = np.asarray(token_x, dtype=np.int32)
         time_inputs = np.asarray(time_feats, dtype=np.float32)
-        return inputs1, inputs2, time_inputs, token_ya, yn, yr
+        return inputs1, inputs2, time_inputs, token_ya, yn, yr, new_scalers
 
     def _create_model(self, vocab_size: int, max_case_length: int):
         from ..models.model_registry import create_model
@@ -157,8 +170,8 @@ class MultiTaskLearningTask:
         self._compile_model(model)
 
         # Prepare arrays
-        X1_tr, X2_tr, T_tr, Ya_tr, Yn_tr, Yr_tr = self._prepare_arrays(loader, ta_tr, tt_tr, tr_tr, max_case_length)
-        X1_va, X2_va, T_va, Ya_va, Yn_va, Yr_va = self._prepare_arrays(loader, ta_val, tt_val, tr_val, max_case_length)
+        X1_tr, X2_tr, T_tr, Ya_tr, Yn_tr, Yr_tr, scalers = self._prepare_arrays(loader, ta_tr, tt_tr, tr_tr, max_case_length)
+        X1_va, X2_va, T_va, Ya_va, Yn_va, Yr_va, _ = self._prepare_arrays(loader, ta_val, tt_val, tr_val, max_case_length, scalers=scalers)
 
         # Train
         callbacks = []
@@ -195,16 +208,17 @@ class MultiTaskLearningTask:
         acc = float(accuracy_score(y_true_a, y_hat_a))
 
         # Time metrics on raw scale (consistent with single-task tasks)
-        y_true_nt = Yn_va.reshape(-1)
-        y_hat_nt = pred_nt.reshape(-1)
-        y_true_rt = Yr_va.reshape(-1)
-        y_hat_rt = pred_rt.reshape(-1)
-        nt_mae = float(mean_absolute_error(y_true_nt, y_hat_nt))
-        nt_mse = float(mean_squared_error(y_true_nt, y_hat_nt))
-        nt_r2 = float(r2_score(y_true_nt, y_hat_nt))
-        rt_mae = float(mean_absolute_error(y_true_rt, y_hat_rt))
-        rt_mse = float(mean_squared_error(y_true_rt, y_hat_rt))
-        rt_r2 = float(r2_score(y_true_rt, y_hat_rt))
+        y_true_nt_raw = scalers['yn'].inverse_transform(Yn_va).reshape(-1)
+        y_hat_nt_raw = scalers['yn'].inverse_transform(pred_nt).reshape(-1)
+        y_true_rt_raw = scalers['yr'].inverse_transform(Yr_va).reshape(-1)
+        y_hat_rt_raw = scalers['yr'].inverse_transform(pred_rt).reshape(-1)
+
+        nt_mae = float(mean_absolute_error(y_true_nt_raw, y_hat_nt_raw))
+        nt_mse = float(mean_squared_error(y_true_nt_raw, y_hat_nt_raw))
+        nt_r2 = float(r2_score(y_true_nt_raw, y_hat_nt_raw))
+        rt_mae = float(mean_absolute_error(y_true_rt_raw, y_hat_rt_raw))
+        rt_mse = float(mean_squared_error(y_true_rt_raw, y_hat_rt_raw))
+        rt_r2 = float(r2_score(y_true_rt_raw, y_hat_rt_raw))
 
         # Determine epochs run from history
         try:

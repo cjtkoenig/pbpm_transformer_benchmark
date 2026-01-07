@@ -254,14 +254,21 @@ class CanonicalLogsProcessor:
                 current_time = timestamps[i]
                 next_time = timestamps[i + 1]
                 time_diff = (next_time - current_time).total_seconds() / 3600.0  # hours
+                # fv_t1: time since previous event
+                recent_time = (timestamps[i] - timestamps[i-1]).total_seconds() / 3600.0 if i > 0 else 0.0
+                # fv_t2: time since event before previous
+                latest_time = (timestamps[i] - timestamps[i-2]).total_seconds() / 3600.0 if i > 1 else 0.0
+                # fv_t3: time since case start
+                time_passed = (timestamps[i] - timestamps[0]).total_seconds() / 3600.0
+
                 rows.append({
                     "case_id": case,
                     "prefix": prefix,
                     "k": i,
                     "next_time": float(time_diff),
-                    "recent_time": 0.0,
-                    "latest_time": 0.0,
-                    "time_passed": 0.0,
+                    "recent_time": float(recent_time),
+                    "latest_time": float(latest_time),
+                    "time_passed": float(time_passed),
                 })
         return pd.DataFrame(rows, columns=["case_id", "prefix", "k", "next_time", "recent_time", "latest_time", "time_passed"]).reset_index(drop=True)
     
@@ -279,14 +286,21 @@ class CanonicalLogsProcessor:
                 prefix = " ".join(case_activities[: i + 1])
                 current_time = timestamps[i]
                 remaining_time = (case_end_time - current_time).total_seconds() / (24 * 3600)  # days
+                # fv_t1: time since previous event
+                recent_time = (timestamps[i] - timestamps[i-1]).total_seconds() / 3600.0 if i > 0 else 0.0
+                # fv_t2: time since event before previous
+                latest_time = (timestamps[i] - timestamps[i-2]).total_seconds() / 3600.0 if i > 1 else 0.0
+                # fv_t3: time since case start
+                time_passed = (timestamps[i] - timestamps[0]).total_seconds() / 3600.0
+
                 rows.append({
                     "case_id": case,
                     "prefix": prefix,
                     "k": i,
                     "remaining_time_days": float(remaining_time),
-                    "recent_time": 0.0,
-                    "latest_time": 0.0,
-                    "time_passed": 0.0,
+                    "recent_time": float(recent_time),
+                    "latest_time": float(latest_time),
+                    "time_passed": float(time_passed),
                 })
         return pd.DataFrame(rows, columns=["case_id", "prefix", "k", "remaining_time_days", "recent_time", "latest_time", "time_passed"]).reset_index(drop=True)
     

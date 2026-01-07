@@ -201,9 +201,13 @@ class RemainingTimeTask:
         start_time = time.time()
         if isinstance(trainer, keras.Model):
             # TensorFlow training
-            # Prepare data
-            x_train, time_x_train, y_train = self._prepare_tensorflow_data(train_df, max_case_length)
-            x_val, time_x_val, y_val = self._prepare_tensorflow_data(val_df, max_case_length)
+            # Prepare data with canonical scaling
+            x_train, time_x_train, y_train, time_scaler, y_scaler = loader.prepare_remaining_time_data(
+                train_df, max_case_length, shuffle=True
+            )
+            x_val, time_x_val, y_val, _, _ = loader.prepare_remaining_time_data(
+                val_df, max_case_length, time_scaler=time_scaler, y_scaler=y_scaler, shuffle=False
+            )
             
             # Train
             callbacks = []
@@ -225,12 +229,13 @@ class RemainingTimeTask:
             y_pred = trainer.predict([x_val, time_x_val], verbose=0)
             infer_time = time.time() - eval_start
             
-            # Calculate metrics (ensure matching 1D shapes)
-            y_true = np.asarray(y_val).reshape(-1)
-            y_hat = np.asarray(y_pred).reshape(-1)
-            mae = float(mean_absolute_error(y_true, y_hat))
-            mse = float(mean_squared_error(y_true, y_hat))
-            r2 = float(r2_score(y_true, y_hat))
+            # Calculate metrics on original scale
+            y_true_raw = y_scaler.inverse_transform(y_val.reshape(-1, 1)).reshape(-1)
+            y_hat_raw = y_scaler.inverse_transform(y_pred.reshape(-1, 1)).reshape(-1)
+            
+            mae = float(mean_absolute_error(y_true_raw, y_hat_raw))
+            mse = float(mean_squared_error(y_true_raw, y_hat_raw))
+            r2 = float(r2_score(y_true_raw, y_hat_raw))
             param_count = int(trainer.count_params())
             
             # Early-stopping transparency (TF/Keras)
