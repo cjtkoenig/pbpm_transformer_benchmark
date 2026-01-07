@@ -339,7 +339,7 @@ run_benchmark: dirs
 
 # Run fixed version with timefeatures for transformer models
 .PHONY: run_benchmark_fixed
-run_benchmark: dirs
+run_benchmark_fixed: dirs
 	@echo "=== PBPM Benchmark fixed time features ==="; \
 	echo "Datasets: BPI_Challenge_2012, Helpdesk, Traffic_Fines, Sepsis, Tourism"; \
 	echo "Step 1/2: Force preprocessing for all datasets..."; \
