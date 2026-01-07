@@ -312,7 +312,7 @@ run_mtl_former_again: dirs
 # === BENCHMARK RUN ===
 .PHONY: run_benchmark
 run_benchmark: dirs
-	@echo "=== PBPM Benchmark: Minimal Mode (activities only) ==="; \
+	@echo "=== PBPM Benchmark ==="; \
 	echo "Datasets: BPI_Challenge_2012, Helpdesk, Traffic_Fines, Sepsis, Tourism"; \
 	echo "Step 1/2: Force preprocessing for all datasets..."; \
 	UV="uv run python -m src.cli"; \
@@ -335,6 +335,26 @@ run_benchmark: dirs
 	$$UV model.name=specialised_lstm task=next_activity data.datasets="$$DATASETS" || exit $$?; \
 	echo "--- shared_lstm (next_activity, extended) ---"; \
 	$$UV model.name=shared_lstm task=next_activity data.datasets="$$DATASETS" || exit $$?;
+	echo "Note: outputs/env.json is overwritten by each run; refer to per-model outputs under outputs/<dataset>/<task>/<model>/";
+
+# Run fixed version with timefeatures for transformer models
+.PHONY: run_benchmark_fixed
+run_benchmark: dirs
+	@echo "=== PBPM Benchmark fixed time features ==="; \
+	echo "Datasets: BPI_Challenge_2012, Helpdesk, Traffic_Fines, Sepsis, Tourism"; \
+	echo "Step 1/2: Force preprocessing for all datasets..."; \
+	UV="uv run python -m src.cli"; \
+	DATASETS="[\"BPI_Challenge_2012\", \"Helpdesk\", \"Traffic_Fines\", \"Sepsis\", \"Tourism\"]"; \
+	$$UV preprocess_action=force data.datasets="$$DATASETS" || exit $$?; \
+	echo "Step 2/2: Train/Evaluate all models and tasks (using config-defined epochs and per-model learning rates)"; \
+	echo "--- ProcessTransformer: next_activity ---"; \
+	$$UV model.name=process_transformer task=next_activity data.datasets="$$DATASETS" || exit $$?; \
+	echo "--- ProcessTransformer: next_time ---"; \
+	$$UV model.name=process_transformer task=next_time data.datasets="$$DATASETS" || exit $$?; \
+	echo "--- ProcessTransformer: remaining_time ---"; \
+	$$UV model.name=process_transformer task=remaining_time data.datasets="$$DATASETS" || exit $$?; \
+	echo "--- MTLFormer: multitask ---"; \
+	$$UV model.name=mtlformer task=multitask data.datasets="$$DATASETS" || exit $$?; \
 	echo "Note: outputs/env.json is overwritten by each run; refer to per-model outputs under outputs/<dataset>/<task>/<model>/";
 
 .PHONY: thesis_report
